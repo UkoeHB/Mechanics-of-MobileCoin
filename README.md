@@ -1,6 +1,6 @@
 # Mechanics-of-MobileCoin (Preview 2/10 chapters)
 
-This is a comprehensive conceptual (and technical) explanation of MobileCoin.
+Mechanics of MobileCoin is a comprehensive conceptual (and technical) exploration of the cryptocurrency MobileCoin.
 
 
 *License*
