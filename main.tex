@@ -170,7 +170,7 @@
 \vspace{1cm}
 
 \begin{center}
-  \includegraphics[width=3cm]{front/figures/mobilecoin_logo3.pdf}
+  \includegraphics[width=3cm]{front/figures/mobilecoin_logo.pdf}
 \end{center}
 
 
@@ -180,8 +180,8 @@
 {\par\centering \textsc{\LARGE exploring the foundations of a private digital currency}\par}
 \bigskip
 %{\par\centering \textsc{\LARGE Published \today{} (v1.0.0)}\par}
-%{\par\centering \textsc{\LARGE \today{}, Draft v0.0.16}\par}
-{\par\centering \textsc{\LARGE \today{}, Preview (2/10) v0.0.16}\par}
+%{\par\centering \textsc{\LARGE \today{}, Draft v0.0.19}\par}
+{\par\centering \textsc{\LARGE \today{}, Preview (3/10) v0.0.19}\par}
 \bigskip
 {\par\centering \textsc{\large koe\footnote{ukoe@protonmail.com}\footnote{Author `koe' worked on this document as part of a private contract with MobileCoin, Inc.}}
 \par}
@@ -190,7 +190,7 @@
 \begin{center}
   \begin{minipage}[t]{6.43in}
 
-\textbf{DRAFT INFORMATION}: This is just a draft, and may not always be available wherever it is currently hosted. The final version will be published at \url{https://github.com/mobilecoinfoundation}.
+\textbf{DRAFT INFORMATION}: This is just a draft, and may not always be available wherever it is currently hosted. The final version will be available at \url{https://github.com/mobilecoinfoundation}.
 
 \textbf{License}: `Mechanics of MobileCoin: First Edition' is released into the public domain.
 
@@ -236,17 +236,17 @@
 
 %\part{Essentials}
 \include{content/basicConcepts}
-\if 01
 \include{content/advancedSchnorr}
+\if 01
 \include{content/addresses}
 \include{content/commitments}
 \include{content/membershipProofs}
 \include{content/transactions}
 \include{content/enclave}
-%\include{content/consensus}
+\include{content/consensus}
 
-%\part{Extensions}
-%\include{content/fog}
+\part{Extensions}
+\include{content/fog}
 %%\include{content/txKnowledgeProofs}
 %%\include{content/multisig}
 %%\include{content/escrowedMarket}

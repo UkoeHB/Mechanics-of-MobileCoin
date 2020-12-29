@@ -1,0 +1,314 @@
+\chapter{Advanced Schnorr-like Signatures}
+\label{chapter:advanced-schnorr}
+
+A basic Schnorr signature has one signing key. However, we can apply its core concepts to create a variety of progressively more complex signature schemes. One of those schemes, MLSAG, will be of central importance in MobileCoin's transaction protocol.
+
+
+
+%-same signing key across multiple bases
+\section{Prove knowledge of a discrete logarithm across multiple bases}
+\label{sec:proofs-discrete-logarithm-multiple-bases}
+
+It is often useful to prove the same private key was used to construct public keys on different `base' keys. For example, we could have a normal public key $k G$, and a Diffie-Hellman shared secret $k R$ with some other person's public key (recall Section \ref{DH_exchange_section}), where the base keys are $G$ and $R$. As we will soon see, we can prove knowledge of the discrete log $k$ in $k G$, prove knowledge of $k$ in $k R$, {\em and} prove that $k$ is the same in both cases (all without revealing $k$).
+
+
+\subsection*{Non-interactive proof}
+
+Suppose we have a private key $k$, and $d$ base keys $\mathcal{J} = \{J_1,...,J_d\}$. The corresponding public keys are $\mathcal{K} = \{K_1,...,K_d\}$. We make a Schnorr-like proof (recall Section \ref{sec:schnorr-fiat-shamir}) across all bases.\footnote{We could turn this proof into a signature by including a message $\mathfrak{m}$ in the challenge hash. The terminology proof/signature is loosely interchangeable in this context.} Assume the existence of a hash function \(\mathcal{H}_n\) 
+mapping to integers from 0 to $l-1$.\footnote{MobileCoin uses the {\tt dalek} library's hash-to-scalar\marginnote{[dalek25519] src/scalar.rs {\tt from\_hash<D>()}} function $\mathcal{H}_n(x) = \textrm{\tt from\_hash<Blake2b>}(x)$. The input $x$ is hashed by the BLAKE2b hashing algorithm \cite{blake2-paper} into a 64-byte bit string, which is passed to {\tt from\_bytes\_mod\_ order\_wide()} and reduced modulo $l$. The final result is in the range 0 to $l-1$ (although it should really be 1 to $l-1$).}
+
+\begin{enumerate}
+	\item Generate random number $\alpha \in_R \mathbb{Z}_l$, then compute, for all $i \in (1,...,d)$, $\alpha J_i$.
+	\item Calculate the challenge:\vspace{.155cm}
+	\[c = \mathcal{H}_n(\mathcal{J},\mathcal{K},[\alpha J_1],[\alpha J_2],...,[\alpha J_d])\]
+	\item Define the response $r = \alpha - c*k$.
+	\item Publish the signature $(c, r)$.
+\end{enumerate}
+
+
+\subsection*{Verification}
+
+Assuming the verifier knows $\mathcal{J}$ and $\mathcal{K}$, he does the following.
+
+\begin{enumerate}
+	\item Calculate the challenge:\vspace{.175cm}
+	\[c' = \mathcal{H}(\mathcal{J},\mathcal{K},[r J_1 + c*K_1],[r J_2 + c*K_2],...,[r J_d + c*K_d])\]
+	\item If $c = c'$ then the signer must know the discrete logarithm across all bases, and it's the same discrete logarithm in each case (as always, except with negligible probability).
+\end{enumerate}
+
+
+\subsection*{Why it works}
+
+If instead of $d$ base keys there was just one, this proof would clearly be the same as our original Schnorr proof (Section \ref{sec:schnorr-fiat-shamir}). We can imagine each base key in isolation to see that the multi-base proof is just a bunch of Schnorr proofs connected together. Moreover, by using only one challenge and response for all of those proofs, they must have the same discrete logarithm $k$. To use multiple private keys but only return one response, you would need to compute an appropriate $\alpha_j$ for each one based on the challenge, but $c$ is a function of $\alpha$!
+
+
+
+%-multiple signing keys on their own unique bases (or they can be the same e.g. G)
+\section{Multiple private keys in one proof}
+\label{sec:multiple_private_keys_in_one_proof}
+
+Much like a multi-base proof, we can combine many Schnorr proofs that use different private keys. Doing so proves we know all the private keys for a set of public keys, and reduces storage requirements by making just one challenge for all proofs.
+
+
+\subsection*{Non-interactive proof}
+
+Suppose we have $d$ private keys $k_1,...,k_d$, and base keys $\mathcal{J} = \{J_1,...,J_d\}$.\footnote{There is no reason $\mathcal{J}$ can't contain duplicate base keys here, or for all base keys to be the same (e.g.\ $G$). Duplicates would be redundant for multi-base proofs, but now we are dealing with different private keys.} The corresponding public keys are $\mathcal{K} = \{K_1,...,K_d\}$. We make a Schnorr-like proof for all keys simultaneously.
+
+\begin{enumerate}
+	\item Generate random numbers $\alpha_i \in_R \mathbb{Z}_l$ for all $i \in (1,...,d)$, and compute all $\alpha_i J_i$.
+	\item Calculate the challenge:\vspace{.155cm}
+	\[c = \mathcal{H}_n(\mathcal{J},\mathcal{K},[\alpha_1 J_1],[\alpha_2 J_2],...,[\alpha_d J_d])\]
+	\item Define each response $r_i = \alpha_i - c*k_i$.
+	\item Publish the signature $(c, r_1,...,r_d)$.
+\end{enumerate}
+
+
+\subsection*{Verification}
+
+Assuming the verifier knows $\mathcal{J}$ and $\mathcal{K}$, he does the following.
+
+\begin{enumerate}
+	\item Calculate the challenge:\vspace{.175cm}
+	\[c' = \mathcal{H}(\mathcal{J},\mathcal{K},[r_1 J_1 + c*K_1],[r_2 J_2 + c*K_2],...,[r_d J_d + c*K_d])\]
+	\item If $c = c'$ then the signer must know the private keys for all public keys in $\mathcal{K}$ (except with negligible probability).
+\end{enumerate}
+
+
+
+\section{Spontaneous Anonymous Group (SAG) signatures}
+\label{SAG_section}
+
+Group signatures are a way of proving a signer belongs to a group, without necessarily identifying him. Originally (Chaum in \cite{Chaum:1991:GS:1754868.1754897}), group signature schemes required the system be set up, and in some cases managed, by a trusted person in order to prevent illegitimate signatures, and, in a few schemes, adjudicate disputes. These relied on a {\em group secret} which is not desirable since it creates a disclosure risk that could undermine anonymity. Moreover, requiring coordination between group members (i.e.\ for setup and management) is not scalable beyond small groups or inside companies.
+
+Liu {\em et al.} presented a more interesting scheme in \cite{Liu2004} building on the work of Rivest {\em et al.} in \cite{rivest-leak-secret}. The authors detailed a group signature algorithm called LSAG characterized by three properties: {\em anonymity, linkability,} and {\em spontaneity}.\footnote{A spontaneous signature is one that can be constructed without the cooperation of any non-signer (e.g.\ any third party). \cite{Liu2004}} Here we discuss SAG, the non-linkable version of LSAG, for conceptual clarity. We reserve the idea of linkability for later sections.
+\\
+
+Schemes with anonymity and spontaneity are typically referred to as `ring signatures'. In the context of MobileCoin they will ultimately allow for unforgeable, signer-ambiguous transactions that leave currency flows largely untraceable.
+
+
+\subsection*{Signature}
+
+Ring signatures are composed of a ring and a signature. Each {\em ring} is a set of public keys, one of which belongs to the signer and the rest of which are unrelated. The {\em signature} is generated with that ring of keys, and anyone verifying it would not be able to tell which ring member was the actual signer.
+
+Our Schnorr-like signature scheme in Section \ref{sec:signing-messages} can be considered a one-key ring signature. We get to two keys by, instead of defining $r$ right away, generating a decoy $r'$ and creating a new challenge to define $r$ with.
+\\
+
+Let \(\mathfrak{m}\) be the message to sign, \(\mathcal{R} = \{K_1, K_2, ..., K_n\}\) a set of distinct public keys (a group/ring), and \(k_\pi\) the signer's private key corresponding to his public key \(K_\pi \in \mathcal{R}\), where $\pi$ is a secret index.
+
+\begin{enumerate}
+	\item Generate random number \(\alpha \in_R \mathbb{Z}_l\) and fake responses  \(r_i \in_R \mathbb{Z}_l\) for \(i \in \{1, 2, ..., n\}\) but excluding \(i = \pi\).
+
+	\item Calculate\footnote{The challenge $c_{\pi + 1}$ is indexed $\pi + 1$ because it is the input to the challenge produced for the ring member $K_{\pi + 1}$.}
+	\[c_{\pi+1} = \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [\alpha G])\]
+
+	\item For \(i = \pi+1, \pi+2, ..., n, 1, 2, ..., \pi-1\) calculate, replacing \(n + 1 \rightarrow 1\),\vspace{.175cm}
+	\[  c_{i+1} = \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_i G + c_i K_i])\] 
+
+	\item Define the real response $r_\pi$ such that \(\alpha = r_\pi + c_\pi k_\pi \pmod l\).
+\end{enumerate}
+
+The ring signature contains the signature \(\sigma(\mathfrak{m}) = (c_1, r_1, ..., r_n) \) and the ring $\mathcal{R}$.
+
+
+\subsection*{Verification}
+
+Verification means proving $\sigma(\mathfrak{m})$ is a valid signature created by a private key corresponding to a public key in $\mathcal{R}$ (without necessarily knowing which one), and is done in the following manner:
+
+\begin{enumerate}
+	\item For \(i = 1, 2, ..., n\) iteratively compute, replacing \(n + 1 \rightarrow 1\),\vspace{.175cm}
+	\begin{align*}
+	c'_{i+1}   = \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_i G + c_i {K_i}])
+	\end{align*}
+
+	\item If \(c_1 = c'_1\) then the signature is valid. Note that $c'_1$ is the last term calculated.
+\end{enumerate}
+
+In this scheme we store (1+$n$) integers and use $n$ public keys.
+
+
+\subsection*{Why it works}
+
+We can informally convince ourselves the algorithm works by going through an example. Consider ring $R = \{K_1, K_2, K_3\}$ with $k_\pi = k_2$. First the signature:
+\begin{enumerate}
+    \item Generate random numbers: $\alpha$, $r_1$, $r_3$
+\begin{align*}
+    \intertext{\item Seed the signature loop:}	c_3 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [\alpha G])
+    \intertext{\item Iterate: \vspace{-.2cm}}
+        c_1 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_3 G + c_3 K_3])\\
+        c_2 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_1 G + c_1 K_1])
+\end{align*}
+    \item Close the loop by responding: $r_2 = \alpha - c_2 k_2 \pmod{l}$
+\end{enumerate}
+
+We can substitute $\alpha$ into $c_3$ to see where the word ‘ring' comes from:\vspace{.175cm}
+\begin{alignat*}{3}
+    c_3 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [(r_2 + c_2 k_2) G &&])\\
+    c_3 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_2 G + c_2 K_2 &&])
+\end{alignat*}\vspace{.05cm}
+
+Then verify it with $\mathcal{R}$ and $\sigma(\mathfrak{m}) = (c_1, r_1, r_2, r_3)$:
+\begin{enumerate}
+    \item We use $r_1$ and $c_1$ to compute\vspace{.175cm}
+    \begin{align*}
+c'_2 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_1 G + c_1 K_1])
+    \intertext{\item Looking back to the signature, we see $c'_2 = c_2$. With $r_2$ and $c'_2$ we compute\vspace{.175cm}}
+c'_3 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_2 G + c'_2 K_2])
+    \intertext{\item We can easily see that $c'_3 = c_3$ by substituting $c_2$ for $c'_2$. Using $r_3$ and $c'_3$ we get\vspace{.175cm}}
+c'_1 &= \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [r_3 G + c'_3 K_3])
+    \end{align*}
+\end{enumerate}
+\quad No surprises here: $c'_1 = c_1$ if we substitute $c_3$ for $c'_3$.\vspace{-.3cm}
+
+
+
+\section{Back's Linkable Spontaneous Anonymous Group (bLSAG) signatures}
+\label{sec:blsag}
+
+The remaining ring signature schemes discussed in this chapter display several properties that will be useful for producing confidential transactions.\footnote{Keep in mind that all robust signature schemes have security models which contain various properties. The properties mentioned here are perhaps most relevant to understanding the purpose of MobileCoin's ring signatures, but are not a comprehensive overview of linkable ring signature properties.} Note that both `signer ambiguity' and `unforgeability' also apply to SAG signatures.
+
+\begin{description}
+	\item[Signer Ambiguity]
+	An observer should be able to determine the signer must be a member of the ring (except with negligible probability), but not which member.\footnote{\label{anonymity_note}Anonymity for an action is usually in terms of an `anonymity set’, which is `all the people who could have possibly taken that action’. The largest anonymity set is `humanity’, and for MobileCoin it is the ring size. Expanding anonymity sets makes it progressively harder to track down real actors. As we will see in Chapter \ref{chapter:transactions}, MobileCoin users potentially belong to much larger anonymity sets, even on the order of `all MobileCoin users'.} MobileCoin uses this to obfuscate the origin of funds in each transaction.
+
+	\item[Linkability]
+	If a private key is used to sign two different messages then the messages will become linked.\footnote{\label{linkability_note}The linkability property does not apply to non-signing public keys. That is, a ring member whose public key has been used in different ring signatures will not cause linkage.} As we will show, this property is used to prevent double-spending attacks in MobileCoin (except with negligible probability).
+
+	\item[Unforgeability]
+    No attacker can forge a signature except with negligible probability.\footnote{Certain ring signature schemes, including the one in MobileCoin, are strong against adaptive chosen-message and adaptive chosen-public-key attacks. An attacker who can obtain legitimate signatures for chosen messages and corresponding to specific public keys in rings of his choice cannot discover how to forge the signature of even one message. This is called {\em existential unforgeability}; see \cite{MRL-0005-ringct} and \cite{Liu2004}.} This is used to prevent theft of MobileCoin funds by those not in possession of the appropriate private keys.
+\end{description}
+
+In the LSAG signature scheme \cite{Liu2004}, the owner of a private key could produce one anonymous unlinked signature per ring.\footnote{\label{lsag_linkability_note}In the LSAG scheme linkability only applies to signatures using rings with the same members and in the same order, the `exact same ring'. It is really ``one anonymous signature per ring member per ring.” Signatures can be linked even if made for different messages.} In this section we present an enhanced version of the LSAG algorithm where linkability is independent of the ring’s decoy members.
+
+The modification was formalized in \cite{MRL-0005-ringct} based on a publication by Adam Back \cite{AdamBack-ring-efficiency} regarding the CryptoNote \cite{cryptoNoteWhitePaper} ring signature algorithm (previously used in various CryptoNote derivatives, and now mostly/entirely deprecated), which was in turn inspired by Fujisaki and Suzuki's work in \cite{Fujisaki2007}.
+
+
+\subsection*{Signature}
+
+As with SAG, let \(\mathfrak{m}\) be the message to sign, \(\mathcal{R} = \{K_1, K_2, ..., K_n\}\) a set of distinct public keys, and \(k_\pi\) the signer's private key corresponding to his public key \(K_\pi \in \mathcal{R}\), where $\pi$ is a secret index. Assume the existence of a hash function \(\mathcal{H}_p\) that maps to curve points in EC.\footnote{It doesn’t matter if points from $\mathcal{H}_p$ are compressed or not. They can always be decompressed. In our case, the function outputs a point in extended coordinates.}\footnote{MobileCoin uses a hash function\marginnote{[dalek25519] src/ristretto.rs {\tt from\_ha- sh<Blake2b>()}} that returns curve points directly, rather than computing some integer that is then multiplied by $G$. $\mathcal{H}_p$ would be broken if someone discovered a way to find $n_x$ such that $n_x G = \mathcal{H}_p(x)$. See a description of the Ristretto-flavored hash-to-point algorithm Elligator in \cite{ristretto-elligator}, which is used by MobileCoin, and note that the input is hashed to 64 bytes with BLAKE2b before being passed to Elligator.}
+
+\begin{enumerate}
+	\item Calculate key image \(\tilde{K} = k_\pi \mathcal{H}_p(K_\pi)\).\footnote{In MobileCoin it's important to use the hash to point function for key images instead of another base point so linearity doesn't lead to linking signatures created by the same address (even if for different one-time addresses). See \cite{cryptoNoteWhitePaper} page 18.}
+
+	\item Generate random number \(\alpha \in_R \mathbb{Z}_l\) and random numbers \(r_i \in_R \mathbb{Z}_l\) for \(i \in \{1, 2, ..., n\}\) but excluding \(i = \pi\).
+
+	\item Compute
+	\[c_{\pi+1} = \mathcal{H}_n(\mathfrak{m}, [\alpha G], [\alpha \mathcal{H}_p(K_\pi)])\]
+
+	\item For \(i = \pi+1, \pi+2, ..., n, 1, 2, ..., \pi-1\) calculate, replacing \(n + 1 \rightarrow 1\),\vspace{.175cm}
+	\[c_{i+1} = \mathcal{H}_n(\mathfrak{m}, [r_i G + c_i K_i], [r_i \mathcal{H}_p(K_i) + c_i \tilde{K}])\]
+
+	\item Define \(r_\pi = \alpha - c_\pi k_\pi \pmod l\).
+\end{enumerate}
+
+The signature will be \(\sigma(\mathfrak{m}) = (c_1, r_1, ..., r_n)\), with key image $\tilde{K}$ and ring $\mathcal{R}$.
+
+
+\subsection*{Verification}
+
+Verification means proving $\sigma(\mathfrak{m})$ is a valid signature created by a private key corresponding to a public key in $\mathcal{R}$, and is done in the following manner:\footnote{As discussed in Section \ref{subsec:problem-cofactors}, with normal Ed25519 adding cofactor-order points to a big-prime-order point can create multiple `equivalent' points when multiplied by a multiple of $h$. It is important here since if we add a cofactor-order point to $\tilde{K}$ and all $c_i$ are multiples of $h$ (which we could achieve with automated trial and error using different $\alpha$ and $r_i$ values), we could make $h$ unlinked valid signatures using the same ring and signing key \cite{key-image-bug}. However, using the Ristretto abstraction to manage EC keys solves this problem by forcing signature creators to communicate key images in compressed form, which always decompress to the same bin member no matter what cofactor-order point was added pre-compression (recall Section \ref{subsec:ristretto}).}
+
+\begin{enumerate}
+	\item For \(i = 1, 2, ..., n\) iteratively compute, replacing \(n + 1 \rightarrow 1\),\vspace{.175cm}
+	\begin{align*}
+	c'_{i+1} = \mathcal{H}_n(\mathfrak{m}, [r_i G + c_i {K_i}], [r_i \mathcal{H}_p(K_i) + c_i \tilde{K}])
+	\end{align*}
+
+	\item If \(c_1 = c'_1\) then the signature is valid.
+\end{enumerate}
+
+In this scheme we store (1+$n$) integers, have one EC key image, and use $n$ public keys.
+
+We could demonstrate correctness (i.e.\ `how it works') in a similar way to the more simple SAG signature scheme.
+
+Our description attempts to be faithful to the original explanation of bLSAG, which does not include $\mathcal{R}$ in the hash that calculates $c_i$. Including keys in the hash is known as `key prefixing'. Recent research \cite{key-prefix-paper} suggests it may not be necessary, although adding the prefix is standard practice for similar signature schemes (LSAG uses key prefixing).
+
+
+\subsection*{Linkability}
+
+Given two valid signatures that are different in some way (e.g.\ different fake responses, different messages, different overall ring members),\vspace{.07cm}
+\begin{align*}
+	\sigma(\mathfrak{m})   &= (c_1, r_1, ..., r_n)\textrm{ with } \tilde{K}\textrm{, and}\\
+	\sigma'(\mathfrak{m}')  &= (c_1', r'_1, ..., r'_{n'})\textrm{ with } \tilde{K}'\textrm{,}
+\end{align*}
+\quad if \(\tilde{K} =  \tilde{K}'\) then clearly both signatures come from the same private key.% because $\tilde{K}= k_{\pi} \mathcal{H}_p(\mathcal{R})$.
+
+While an observer could link $\sigma$ and $\sigma'$, he wouldn't necessarily know which $K_i$ in $\mathcal{R}$ or $\mathcal{R}'$ was the culprit unless there was only one common key between them. If there was more than one common ring member, his only recourse would be solving the DLP or auditing the rings in some way (such as learning all $k_i$ with $i \neq \pi$, or learning $k_\pi$).\footnote{\label{lsag_unforgeable_note}LSAG, which is quite similar to bLSAG, is unforgeable, meaning no attacker could make a valid ring signature without knowing a private key. Liu {\em et al.} prove forgeries that manage to pass verification are extremely improbable~\cite{Liu2004}.}
+
+
+
+\section{Multilayer Linkable Spontaneous Anonymous Group (MLSAG) signatures}
+\label{sec:MLSAG}
+
+In order to sign transactions, one has to sign with multiple private keys. In \cite{MRL-0005-ringct}, Shen Noether {\em et al.} describe a multi-layered generalization of the bLSAG signature scheme applicable when we have a set of \(n \cdot m\) keys; that is, the set\vspace{.175cm}
+\[\mathcal{R} = \{K_{i,j}\}  \quad \textrm{for} \quad  i \in \{1, 2, ..., n\} \quad \textrm{and} \quad j \in \{1, 2, ..., m\}\]
+
+where we know the $m$ private keys \(\{k_{\pi, j}\}\) corresponding to the subset \(\{K_{\pi, j}\}\) for some index \(i = \pi\). MLSAG has a generalized notion of linkability.
+\begin{description}
+	\item[Linkability] If any private key \(k_{\pi, j}\) is used in 2 different signatures, then those signatures will be automatically linked.
+\end{description}
+
+
+\subsection*{Signature}
+
+\begin{enumerate}
+	\item Calculate key images \(\tilde{K_j} = k_{\pi, j} \mathcal{H}_p(K_{\pi, j})\) for all \(j \in \{1, 2, ..., m\}\).
+
+	\item Generate random numbers  \(\alpha_j \in_R \mathbb{Z}_l\), and \(r_{i, j} \in_R \mathbb{Z}_l\) for \(i \in \{1, 2, ..., n\}\) (except \(i = \pi\)) and \(j \in \{1, 2, ..., m\}\).
+
+	\item Compute\footnote{\label{footnote:mobilecoin-challenge-ideosyncracies}In MobileCoin\marginnote{[MC-tx] src/ring\_ signature/ mlsag.rs {\tt RingMLSAG:: sign()}} MLSAGs key prefixing is done by baking the ring members directly into the message added to each challenge. We go into more detail in Section \ref{subsec:ringct-full-signature}. One idiosyncrasy to keep in mind, however, is that the key image is explicitly prefixed in the challenge hash, and isn't included in the message. As we will explain in Section \ref{subsec:ringct-full-signature}, MobileCoin only needs one key image per signature.\vspace{-.15cm}
+	\[c_{\pi+1} = \mathcal{H}_n(\mathfrak{m}, \tilde{K}_{\pi, 1}, [\alpha_1 G], [\alpha_1 \mathcal{H}_p(K_{\pi, 1})], ...)
+	\]}
+	\[c_{\pi+1} = \mathcal{H}_n(\mathfrak{m}, [\alpha_1 G], [\alpha_1 \mathcal{H}_p(K_{\pi, 1})], ..., [\alpha_m G], [\alpha_m \mathcal{H}_p(K_{\pi, m})])\]
+
+	\item For \(i = \pi+1, \pi+2, ..., n, 1, 2, ..., \pi-1\) calculate, replacing \(n + 1 \rightarrow 1\),\vspace{.175cm}
+	\[ c_{i+1} = \mathcal{H}_n(\mathfrak{m}, [r_{i, 1} G + c_i K_{i, 1}], [r_{i, 1} \mathcal{H}_p(K_{i, 1}) + c_i \tilde{K}_1], 
+	..., [r_{i, m} G + c_i K_{i, m}], [r_{i, m} \mathcal{H}_p(K_{i, m}) + c_i \tilde{K}_m])\]
+
+	\item Define all \(r_{\pi, j} = \alpha_j - c_\pi k_{\pi, j} \pmod l\).
+\end{enumerate}
+
+The signature will be \(\sigma(\mathfrak{m}) = (c_1, r_{1, 1}, ..., r_{1, m}, ..., r_{n, 1}, ..., r_{n, m}) \), with key images $(\tilde{K}_1, ...,  \tilde{K}_m)$.
+
+%One way to think about MLSAG is that there are $m$ sub-loops of size $n$, and in each sub-loop we know a private key at index $i = \pi$ ($m \cdot n$ total public keys). The signature algorithm ties together a ‘stack’ of keys at each stage $c$, composed of one key from each sub-loop. bLSAG is the special case where $m = 1$.
+
+
+\subsection*{Verification}
+
+Verification of a signature is done in the following manner:
+
+\begin{enumerate}
+	\item For \(i = 1, ..., n\) compute, replacing \(n + 1 \rightarrow 1\),\vspace{.175cm}
+	\begin{align*}
+	c'_{i+1} = \mathcal{H}_n(\mathfrak{m}, [r_{i, 1} G + c_i K_{i, 1}], [r_{i, 1} \mathcal{H}_p(K_{i, 1}) + c_i \tilde{K}_1], 
+	..., [r_{i, m} G + c_i K_{i, m}], [r_{i, m} \mathcal{H}_p(K_{i, m}) + c_i \tilde{K}_m])
+	\end{align*}
+
+	\item If \(c_1 = c'_1\) then the signature is valid.
+\end{enumerate}
+
+
+\subsection*{Why it works}
+
+Just as with the SAG algorithm, we can readily observe that
+
+\begin{itemize}
+    \item If \(i \ne \pi \), then clearly the values \(c'_{i + 1}\) are calculated as described in the signature algorithm.
+
+    \item If \(i = \pi\) then, since \(r_{\pi, j} = \alpha_j - c_\pi k_{\pi, j} \) closes the loop,\vspace{.175cm}
+    \begin{alignat*}{6}
+        r_{\pi, j} G + c_\pi K_{\pi,j} &= (\alpha_j - c_\pi k_{\pi, j}) G + c_\pi K_{\pi,j} = \alpha_j G\\
+        \intertext{and}
+        r_{\pi, j} \mathcal{H}_p(K_{\pi, j}) + c_\pi \tilde{K}_j &= (\alpha_j - c_\pi k_{\pi, j}) \mathcal{H}_p(K_{\pi, j}) + c_\pi \tilde{K}_j = \alpha_j \mathcal{H}_p(K_{\pi, j})\\
+    \end{alignat*}
+    In other words, it holds also that \(c'_{\pi + 1} = c_{\pi+1}\).
+\end{itemize}
+
+
+\subsection*{Linkability}
+
+If a private key \(k_{\pi, j}\) is re-used to make any signature, the corresponding key image \(\tilde{K}_j\) supplied in the signature will reveal it. This observation matches our generalized definition of linkability.\footnote{As with bLSAG, linked MLSAG signatures do not indicate which public key was used to sign it. However, if the linking key image's sub-loops' rings have only one key in common, the culprit is obvious. If the culprit is identified, all other signing members of both signatures are revealed since they share the culprit's indices.}
+
+
+\subsection*{Space requirements}
+
+In this scheme we store (1+$m*n$) integers, have $m$ EC key images, and use $m*n$ public keys.
