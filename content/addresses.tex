@@ -1,0 +1,127 @@
+\chapter{Addresses}
+\label{chapter:addresses}
+
+The ownership of digital currency stored in a blockchain is controlled by so-called `addresses'. Addresses are sent money that only the address-holders can spend.\footnote{Except with negligible probability.}
+
+More specifically, an address owns the `outputs' from some transactions, which are like notes giving the address-holder spending rights to an `amount' of money. Such a note might say ``Address C now owns 5.3 XMR".
+
+To spend an owned output, the address-holder references it as the input to a new transaction. This new transaction has outputs owned by other addresses (or by the sender's address, if the sender wants). A transaction's total input amount equals its total output amount, and once spent an owned output can't be respent. Carol, who has Address C, could reference that old output in a new transaction (e.g.\ ``In this transaction I'd like to spend that old output.") and add a note saying ``Address B now owns 5.3 XMR".
+
+An address's balance is the sum of amounts contained in its unspent outputs.\footnote{Computer applications known as `wallets' are used to find and organize the outputs owned by an address, to maintain custody of its private keys for authoring new transactions, and to submit those transactions to the network for verification and inclusion in the blockchain.}
+
+We discuss hiding the amount from observers in Chapter \ref{chapter:pedersen-commitments}, the structure of transactions in Chapter \ref{chapter:transactions} (which includes how to prove you are spending an owned and previously unspent output, without even revealing which output is being spent), and the money creation process and role of observers in Chapter \ref{chapter:blockchain}.
+
+
+
+\section{User keys}
+\label{sec:user-keys}
+
+Unlike Bitcoin, MobileCoin users have two sets of private/public keys, \((k^v, K^v)\) and \( (k^s, K^s) \), generated as described in Section \ref{subsec:ec-keys}.
+
+The {\em address}\marginnote{account-ke- ys/src/acc- ount\_keys.rs {\tt {\em struct} PublicAdd- ress}} of a user is the pair of public keys \((K^v, K^s)\). Her private keys will be the corresponding pair \( (k^v, k^s) \).\footnote{To communicate an address to other users, it is common to encode it in base58, a binary-to-text encoding scheme first created for Bitcoin \cite{base-58-encoding}. In brief\marginnote{mobilecoind/ src/service.rs {\tt get\_public\_a- ddress\_impl()}}, addresses are set in a `protobuf' format \cite{protubuf-encoding}, which is just a method of writing messages so they are easy to understand by recipients, a 4-byte checksum is prepended to the protubuf'd address (allowing users of the address to check if the message they receive is malformed), then the resulting byte sequence is converted to base58.}
+\\
+
+Using two sets of keys allows function segregation. The rationale will become clear later in this chapter, but for the moment let us call private key $k^v$ the {\em view key}, and $k^s$ the {\em spend key}. A person can use their view key to determine if their address owns an output, and their spend key will allow them to spend that output in a transaction (and retroactively figure out it has been spent).\footnote{\label{footnote:private-keys-and-blake2b256}In the core MobileCoin implementation, the view and spend private keys are derived from a so-called `root entropy' with a `key derivation function'. This boils down to a domain-separated hash of a random 32-byte number $u$, such that $k_v = H_{Blake2b256}(u, \textrm{``view"}) \pmod l$ and $k_s = H_{Blake2b256}(u, \textrm{``spend"}) \pmod l$. Oddly, deriving private keys doesn't use the typical $H_n()$ hash function mentioned in Section \ref{sec:proofs-discrete-logarithm-multiple-bases}, but instead a wrapper around Blake2b that creates 32-byte outputs instead of 64-bytes. The hash wrapper\marginnote{account-keys/ src/identity.rs {\tt AccountKey:: from()}} is used by the RustCrypto library {\tt KDFs} \cite{kdfs-rust-lib} to hash the inputs. A person only needs to save the root entropy $u$ in order to access (view and spend) all of the outputs they own (spent and unspent).}
+
+
+
+\section{One-time addresses}
+\label{sec:one-time-addresses}
+
+To receive money, a MobileCoin user may distribute their address to other users, who can then send it money via transaction outputs.
+
+The address is never used directly.\footnote{\label{footnote:address-wallet-standards}The method described here is not enforced by the protocol, just by wallet implementation standards. This means an alternate wallet could follow the style of Bitcoin where recipients' addresses are included directly in transaction data. Such a non-compliant wallet would produce transaction outputs unusable by other wallets, and each Bitcoin-esque address could only be used once due to key image uniqueness.} Instead, a Diffie-Hellman-like exchange is applied between the address and a so-called txout public key. The result is a unique {\em one-time address} for each transaction output to be paid to the user. This means even external observers who know all users’ addresses cannot use them to identify which user owns any given transaction output.\footnote{Except with negligible probability.}
+
+%A recipient can spend their received outputs by signing a message with the one-time addresses, thereby proving they know the private keys and therefore own what they are spending. We will gradually flesh out this concept.
+%\\
+
+Let’s start with a very simple mock transaction, containing exactly one output --- a payment of `0' amount from Alice to Bob.
+
+Bob has private/public keys $(k_B^v, k_B^s)$ and $(K_B^v, K_B^s)$, and Alice knows his public keys (his address). The mock transaction could proceed as follows \cite{cryptoNoteWhitePaper}:
+
+\begin{enumerate}
+	\item Alice generates\marginnote{[MC-tx] src/onetime\_ keys.rs {\tt create\_one- time\_pub- lic\_key()}} a random number $r \in_R \mathbb{Z}_l$, and calculates the one-time address\footnote{In MobileCoin whenever an EC key is hashed, it is the Ristretto compressed form of that key (unless otherwise stated). Aside from being a simple convention, this ensures there are no cofactor-order-point related problems.}\vspace{.175cm}
+	\[K^o  = \mathcal{H}_n(r K_B^v)G + K_B^s\]
+
+	\item Alice sets $K^o$ as the addressee of the payment, adds the output amount `0' and the so-called {\em transaction output public key} $r G$ (henceforth abbreviated as the txout public key) to the transaction data, and submits it to the network.\footnote{In CryptoNote the key $r G$ is termed the `transaction public key' \cite{cryptoNoteWhitePaper}, while MobileCoin re-brands it to `transaction output public key' to better express its role.}
+
+	\item Bob\marginnote{[MC-tx] src/onetime\_ keys.rs {\tt view\_key\_ matches\_ output()}} receives the data and sees the values $r G$ and $K^o$. He can calculate $k_B^v r G = r K_B^v$. He can then calculate $K'^s_B = K^o - \mathcal{H}_n(r K_B^v)G$. When he sees that $K'^s_B \stackrel{?}{=} K_B^s$, he knows the output is addressed to him.
+
+	The private key $k_B^v$ is called the `view key' because anyone who has it (and Bob’s public spend key $K_B^s$) can calculate $K'^s_B$ for every transaction output in the blockchain (record of transactions), and ‘view’ which ones belong to Bob.
+
+	\item The one-time keys for the output are:\marginnote{[MC-tx] src/onetime\_ keys.rs {\tt recover\_ onetime\_ private\_ key()}}[1.2cm]\vspace{.175cm}
+	\begin{align*}
+		K^o &= \mathcal{H}_n(r K_B^v)G + K_B^s = (\mathcal{H}_n(r K_B^v) + k_B^s)G  \\ 
+		k^o &= \mathcal{H}_n(r K_B^v) + k_B^s
+	\end{align*}
+\end{enumerate}
+
+To spend his `0' amount output in a new transaction, all Bob needs to do is prove ownership by signing a message with the one-time key $K^o$. The private key $k_B^s$ is the `spend key' since it is required for proving output ownership.
+
+As will become clear in Chapter \ref{chapter:transactions}, without $k^o$ Alice can't compute the output's key image, so she can never know for sure if Bob spends the output she sent him.\footnote{Imagine Alice produces two transactions, each containing the same one-time output address $K^o$ that Bob can spend. Since $K^o$ only depends on $r$ and $K_B^v$, there is no reason she can't do it. Bob can only spend one of those outputs because each one-time address only has one key image, so if he isn't careful Alice might trick him. She could make transaction 1 with a lot of money for Bob, and later transaction 2 with a small amount for Bob. If he spends the money in 2, he can never spend the money in 1. In fact, no one could spend the money in 1, effectively `burning' it. MobileCoin avoids this problem by enforcing\marginnote{*consensus/ service/src/ validators.rs {\tt is\_valid()}} unique txout public keys on the blockchain. Even if duplicate one-time keys exist, only one of them can be paired with the txout public key that helped create it, so Bob won't ever find the other one and needn't worry about it.}\footnote{Bob may give a third party his view key. Such a third party could be a trusted custodian, an auditor, a tax authority, etc., somebody who could be allowed partial read access to the user’s transaction history, without any further rights. However, the private view key can't be used to recreate key images (see Section \ref{subsec:ringct-double-spend}), so it can't reveal when outputs have been spent. This third party would also be able to decrypt the output's amount (see Section~\ref{sec:pedersen-ringct}).} %See Chapter \ref{chapter:tx-knowledge-proofs} for other ways Bob could provide information about his transaction history.
+
+
+
+\section{Subaddresses}
+\label{sec:subaddresses}
+
+MobileCoin users can generate subaddresses from each address \cite{MRL-0006-subaddresses}. Funds sent to a subaddress can be viewed and spent using its main address’s view and spend keys. By analogy: an online bank account may have multiple balances corresponding to credit cards and deposits, yet they are all accessible and spendable from the same point of view --- the account holder.
+
+Subaddresses are convenient for receiving funds to the same place when a user doesn't want to link his activities together by publishing/using the same address. As we will see, most observers would have to solve the DLP to determine a given subaddress is derived from any particular address~\cite{MRL-0006-subaddresses}.\footnote{The alternative to subaddresses would be generating many normal addresses. To view each address's balance, you would need to do a separate scan of the blockchain record (very inefficient). With subaddresses, users can maintain a look-up table\marginnote{mobilecoind/ src/database.rs {\tt get\_subaddre- ss\_id\_by\_spk()}} of spend keys, so one scan of the blockchain takes the same amount of time for 1 subaddress, or 10,000 subaddresses.}
+
+They are also useful for differentiating between received outputs. For example, if Alice wants to buy an apple from Bob on a Tuesday, Bob could write a receipt describing the purchase and make a subaddress for that receipt, then ask Alice to use that subaddress when she sends him the money. This way Bob can associate the money he receives with the apple he sold.
+
+Bob\marginnote{account-ke- ys/src/acc- ount\_keys.rs {\tt subadd- ress()}} generates his $i^\nth$ subaddress $(i = 1, 2, ...)$ from his address as a pair of public keys $(K^{v,i}, K^{s,i})$:\vspace{.175cm}
+\begin{align*}
+    K^{s,i} &= K^s + \mathcal{H}_n(k^v, i) G\\
+    K^{v,i} &= k^v K^{s,i}
+\end{align*}
+\quad So,
+\begin{alignat*}{2}
+    K^{v,i} &= k^v&&(k^s + \mathcal{H}_n(k^v, i))G\\
+    K^{s,i} &= &&(k^s + \mathcal{H}_n(k^v, i))G
+\end{alignat*}
+    
+
+\subsection{Sending to a subaddress}
+\label{subsec:subaddresses-sending-to}
+    
+Let's say Alice is going to send Bob `0' amount again, this time via his subaddress $(K_B^{v,1}, K_B^{s,1})$.
+\begin{enumerate}
+	\item Alice generates a random number $r \in_R \mathbb{Z}_l$, and calculates the one-time address\vspace{.175cm}
+	\[ K^o  = \mathcal{H}_n(r K_B^{v,1})G + K_B^{s,1} \]
+
+	\item Alice sets $K^o$ as the addressee of the payment, adds the output amount `0' and the txout public key $r K_B^{s,1}$ to the transaction data, and submits it to the network.
+
+	\item Bob\marginnote{[MC-tx] src/onetime\_ keys.rs {\tt recover\_pu- blic\_suba- ddress\_sp- end\_key()}}[-1cm] receives the data and sees the values $r K_B^{s,1}$ and $K^o$. He can calculate $k_B^v r K_B^{s,1} = r K_B^{v,1}$. He can then calculate $K'^{s}_B = K^o - \mathcal{H}_n(r K_B^{v,1})G$. When he sees that $K'^{s}_B \stackrel{?}{=} K^{s,1}_B$, he knows the transaction is addressed to him.\footnote{\label{footnote:janus-attack}An advanced attacker may be able to link subaddresses \cite{janus-attack} (a.k.a.\ the Janus attack). With subaddresses (one of which can be a normal address) $K_B^1$ $\&$ $K_B^2$ the attacker thinks may be related, he makes a transaction output with $K^o = \mathcal{H}_n(r K_B^{v,2})G + K_B^{s,1}$ and includes txout public key $r K_B^{s,2}$. Bob calculates $r K_B^{v,2}$ to find $K'^{s,1}_B$, but has no way of knowing it was his {\em other} (sub)address's view key used! If he tells the attacker that he received funds to $K_B^1$, the attacker will know $K_B^2$ is a related subaddress (or normal address). Based on an extensive analysis \cite{update-tx-supplement-proposal-monero}, the most efficient known mitigation is encrypting the txout private key $r$ and adding it to transaction data. See \cite{janus-mitigation-issue-62} for background on this topic. We are not aware of any wallets that have implemented a mitigation for this attack. See Section \ref{subsec:fog-encrypted-fog-hints} footnote \ref{footnote:fog-hint-janus-mitigation} for a different mitigation that could be added to MobileCoin in the future.}
+
+	Bob only needs his private view key $k_B^v$ and subaddress public spend key $K^{s,1}_B$ to find transaction outputs sent to his subaddress.
+
+	\item The one-time keys for the output are:\vspace{.175cm}
+	\begin{align*}
+		K^o &= \mathcal{H}_n(r K_B^{v,1})G + K_B^{s,1} = (\mathcal{H}_n(r K_B^{v,1}) + k_B^{s,1})G  \\ 
+		k^o &= \mathcal{H}_n(r K_B^{v,1}) + k_B^{s,1}
+	\end{align*}
+\end{enumerate}
+
+
+
+\section{Multi-output transactions}
+\label{sec:multi_out_transactions}
+
+Most transactions will contain more than one output, if nothing else, to transfer `change’\marginnote{mobile- coind/src/ payments.rs {\tt build\_tx\_ proposal()}}[-1cm] back to the sender (see Section \ref{sec:ringct-introduction}).\footnote{Each transaction is limited to no more than 16 outputs.\marginnote{[MC-tx] src/const- ants.rs {\tt MAX\_OUTPUTS}}}
+
+To ensure that all one-time addresses in a transaction with $p$ outputs are different even in cases where the same addressee is used twice, MobileCoin uses a unique txout private key $r_t$ for each\marginnote{[MC-tx] std/src/ transaction\_ builder.rs {\tt create\_out- put()}} output $t \in 1, ..., p$. The key $r_t G$ is published as part of its corresponding output in the blockchain.\vspace{.175cm}
+\begin{align*}
+  K_t^o &= \mathcal{H}_n(r_t K_t^v)G + K_t^s = (\mathcal{H}_n(r_t K_t^v) + k_t^s)G  \\ 
+  k_t^o &= \mathcal{H}_n(r_t K_t^v) + k_t^s
+\end{align*} 
+
+Moreover, to promote uniformity the core MobileCoin implementation never passes users' normal addresses out for receiving funds. Instead, only subaddresses are made available.\footnote{The txout public key is constructed differently for subaddresses vs. normal addresses, so if normal address are permitted then to properly construct transactions, senders must know what kind of address they are dealing with.} Since cross-wallet compatibility is a guiding principle in wallet design, it is unlikely that any new wallet will break that pattern. This means, unlike other CryptoNote variants \cite{cryptoNoteWhitePaper}, the txout public key will likely never appear in the form $r_t G$ in the blockchain, but will instead always be $r_t K^{s,i}_t$.
+
+
+
+\section{Multisignature addresses}
+\label{sec:multisignature-addresses}
+
+Sometimes it is useful to share ownership of funds between different people/addresses. MobileCoin does not currently support any form of multisignatures, although they could theoretically be implemented by a third party. Future editions of `Mechanics of MobileCoin' may discuss this topic, but for now we defer to the treatment in Chapters 9 and 10 of \cite{ztm-2}.

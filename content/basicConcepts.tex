@@ -24,7 +24,7 @@ However, we don’t see this as a loss. A simple object such as an integer or a 
 
 Elliptic curve points are normally denoted by pairs \((x, y)\), and can therefore be represented with two integers. However, in the world of cryptography it is common to apply {\em point compression} techniques that allow a point to be represented using only the space of one coordinate. For our conceptual approach it is often accessory whether point compression is used or not, but most of the time it is implicitly assumed.\\
 
-We\marginnote{[blake2] src/ {\tt blake2b.rs}} have also used cryptographic hash functions freely without specifying any concrete algorithms. In the case of MobileCoin it will typically be BLAKE2b\footnote{The BLAKE2 hashing algorithm is a successor to the NIST standard {\em SHA-3} \cite{nist-sha3} finalist BLAKE. The BLAKE2b variant is optimized for 64-bit platforms. \cite{blake2-paper}}, but if not explicitly mentioned then it is not important to the theory. 
+We\marginnote{[blake2] src/ blake2b.rs} have also used cryptographic hash functions freely without specifying any concrete algorithms. In the case of MobileCoin it will typically be BLAKE2b\footnote{The BLAKE2 hashing algorithm is a successor to the NIST standard {\em SHA-3} \cite{nist-sha3} finalist BLAKE. The BLAKE2b variant is optimized for 64-bit platforms. \cite{blake2-paper}}, but if not explicitly mentioned then it is not important to the theory. 
 
 A cryptographic hash function (henceforth simply `hash function', or `hash') takes in some message $\mathfrak{m}$ of arbitrary length and returns a hash $h$ (or `message digest') of fixed length, with each possible output equiprobable for a given input. Cryptographic hash functions are difficult to reverse (called preimage resistance), have an interesting feature known as the {\em large avalanche effect} that can cause very similar messages to produce very dissimilar hashes, and it is hard to find two messages with the same message digest.
 
@@ -255,7 +255,7 @@ Put simply, any two points $P_a$ and $P_b$ with order $u$ are in the same subgro
 
 Elliptic curve points have no concept of `proximity', so for our clock-like example with $N = 6$, $P_3$ is no `closer' or `farther' from $I$ than $P_1$. However, to connect the analogy we can `map' curve points onto the ring. Take any point $P_w$ with order $N$ and put it at position 1, then construct the ring out of multiples of $P_w$. All of the observations we have made so far still hold, and will hold even if the mapping is redone with a different point $P_z$ that also has order $N$.
 
-ECs\marginnote{[dalek25519] src/backend/ serial/
+ECs\marginnote{[dalek25519] src/back- end/serial/
 curve\_ models/ mod.rs} selected for cryptography typically have $N = hl$, where $l$ is some sufficiently large (such as 160 bits) prime number and $h$ is the so-called {\em cofactor} which could be as small as 1 or 2.\footnote{EC with small cofactors allow relatively faster point addition, etc. \cite{Bernstein2008-twisted-edwards}.} One point in the subgroup of size $l$ is usually selected to be the generator $G$ as a convention. For every other point $P$ in that subgroup there exists an integer $0 < n \leq l$ satisfying $P = n G$.
 
 Based on our understanding from the previous section, we can use the following algorithm to find (non-point-at-infinity) points in the subgroup of order $l$:
@@ -266,7 +266,7 @@ Based on our understanding from the previous section, we can use the following a
     \item If $P \stackrel{?}{=} I$ return to step 2; otherwise, $P$ is in the subgroup of order $l$.
 \end{enumerate}
 
-Calculating the scalar\marginnote{[dalek25519] src/backend/ serial/
+Calculating the scalar\marginnote{[dalek25519] src/back- end/serial/
 [u32$|$u64]/ scalar.rs} product between any integer $n$ and any point $P$, $nP$, is not difficult, whereas finding $n$ such that $P_1 = n P_2$ is thought to be computationally hard. By analogy to modular arithmetic, this is often called the {\em discrete logarithm problem} (DLP).\footnote{In modular arithmetic, finding the discrete log of $h$ with respect to $g$, $x$, such that $g^x = h$, is thought to be difficult for some group orders. \cite{network-security-crash-course-dlp}} Scalar multiplication can be seen as a {\em one-way function}, which paves the way for using elliptic curves for cryptography.\footnote{No known equation or algorithm can efficiently (based on available technology) solve for $n$ in $P_1 = n P_2$, meaning it would take many, many years to unravel just one scalar product.}
 
 The scalar product $nP$ is equivalent to $(((P+P)+(P+P))...)$. Though not always the most efficient approach, we can use double-and-add like in Section \ref{subsec:modular-addition-multiplication}. To get the sum $R = n P$, remember we use the $+$ point operation discussed in Section \ref{subsec:elliptic_curves_section}.

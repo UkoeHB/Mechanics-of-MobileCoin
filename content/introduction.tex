@@ -30,7 +30,7 @@ We intend to address this situation by introducing the fundamental concepts nece
 
 To provide the best experience for our readers, we have taken care to build a constructive, step-by-step description of the MobileCoin cryptocurrency.
 
-In the first edition of this report we have centered our attention on version 1 of the MobileCoin protocol\footnote{The `protocol' is the set of rules that each new block is tested against before it can be added to the blockchain. This set of rules includes the `transaction protocol' (currently version 1, which we call {\tt TXTYPE\_RCT\_1} for clarity), which are general rules pertaining to how a transaction is constructed.}, corresponding to version 1.0.0 of the MobileCoin software suite. All transaction and blockchain-related mechanisms described here belong to those versions.\footnote{The MobileCoin codebase's integrity and reliability is predicated on assuming enough people have reviewed it to catch most or all significant errors. We hope that readers will not take our explanations for granted, and verify for themselves the code does what it's supposed to. If it does not, we hope you will make a responsible disclosure (by emailing \url{security@mobilecoin.foundation}) for major problems, or Github pull request (\url{https://github.com/mobilecoinfoundation/mobilecoin}) for minor issues.}%[[[revisit]]]\footnote{Several protocols worth considering for the next generation of Monero transactions are undergoing research and investigation, including Triptych \cite{triptych-preprint}, RingCT3.0 \cite{ringct3-preprint}, Omniring \cite{omniring-paper}, and Lelantus \cite{lelantus-preprint}.}
+In the first edition of this report we have centered our attention on version 1 of the MobileCoin protocol\footnote{The `protocol' is the set of rules that each new block is tested against before it can be added to the blockchain. This set of rules includes the `transaction protocol' (currently version 1, which we call {\tt TXTYPE\_RCT\_1} for clarity), which are general rules pertaining to how a transaction is constructed.}, corresponding to version 1.0.0 of the MobileCoin software suite. All transaction and blockchain-related mechanisms described here belong to those versions.\footnote{The MobileCoin codebase's integrity and reliability is predicated on assuming enough people have reviewed it to catch most or all significant errors. We hope that readers will not take our explanations for granted, and verify for themselves the code does what it's supposed to. If it does not, we hope you will make a responsible disclosure (by emailing \url{security@mobilecoin.foundation}) for major problems, or Github pull request (\url{https://github.com/mobilecoinfoundation/mobilecoin}) for minor issues.}%[[[revisit]]]\footnote{Several protocols worth considering for the next generation of MobileCoin transactions are undergoing research and investigation, including Triptych \cite{triptych-preprint}, RingCT3.0 \cite{ringct3-preprint}, Omniring \cite{omniring-paper}, and Lelantus \cite{lelantus-preprint}.}
 
 
 
@@ -81,19 +81,19 @@ Since MobileCoin is a very new cryptocurrency, we will not go into detail on hyp
 
 In our quest for comprehensiveness, we have chosen to present all the basic elements of cryptography needed to understand the complexities of MobileCoin, and their mathematical antecedents. In Chapter \ref{chapter:basicConcepts} we develop essential aspects of elliptic curve cryptography.
 
-Chapter \ref{chapter:advanced-schnorr} expands on the Schnorr signature scheme introduced in the prior chapter, and outlines the ring signature algorithms that will be applied to achieve confidential transactions. Chapter 4 explores how MobileCoin uses addresses to control ownership of funds, and the different kinds of addresses.%\ref{chapter:addresses}
+Chapter \ref{chapter:advanced-schnorr} expands on the Schnorr signature scheme introduced in the prior chapter, and outlines the ring signature algorithms that will be applied to achieve confidential transactions. Chapter \ref{chapter:addresses} explores how MobileCoin uses addresses to control ownership of funds, and the different kinds of addresses.%\ref{chapter:addresses}
 
 %\ref{chapter:pedersen-commitments}
 %\ref{chapter:membership-proofs}
 In Chapter 5 we introduce the cryptographic mechanisms used to conceal amounts. Chapter 6 is dedicated to membership proofs, which are used to prove MobileCoin transactions spend funds that exist in the blockchain. With all the components in place, we explain the transaction scheme used by MobileCoin in Chapter 7.%\ref{chapter:transactions}
 
 %\ref{chapter:enclaves}
-We shed light on secure enclaves in Chapter 8, and the MobileCoin blockchain is unfolded in Chapter~9.%\ref{chapter:consensus}
+We shed light on secure enclaves in Chapter 8, the MobileCoin blockchain is unfolded in Chapter~9, and the MobileCoin consensus protocol used to create the blockchain is elucidated in Chapter 10.%\ref{chapter:consensus}
 
 
 \subsection{Extensions}
 
-A cryptocurrency is more than just its protocol. As part of MobileCoin's original design, a `service-layer' technology known as Fog was developed. Discussed in Chapter 10, Fog is a service that searches the blockchain and identifies transaction outputs owned by its users. This allows users to avoid scanning the blockchain themselves, which is time-consuming and resource-intensive (a prohibitive burden for e.g.\ mobile devices). Importantly, the service operator is not able to learn anything about those outputs.%\ref{chapter:fog}
+A cryptocurrency is more than just its protocol. As part of MobileCoin's original design, a `service-layer' technology known as Fog was developed. Discussed in Chapter 11, Fog is a service that searches the blockchain and identifies transaction outputs owned by its users. This allows users to avoid scanning the blockchain themselves, which is time-consuming and resource-intensive (a prohibitive burden for e.g.\ mobile devices). Importantly, the service operator is not able to learn more than approximately how many outputs its users own.%\ref{chapter:fog}
 
 
 \subsection{Additional content}
@@ -107,6 +107,7 @@ We\marginnote{Isn't this useful?} use margin notes to indicate where MobileCoin 
 Some code references are to third-party libraries, which we tagged with square brackets. These include
 \begin{itemize}
     \item {[dalek25519]}: the {\tt dalek-cryptography curve25519-dalek} library \cite{dalek-curve25519-lib}
+    \item {[dalekEd]}: the {\tt dalek-cryptography ed25519-dalek} library \cite{dalek-ed25519-lib}
     \item {[dalekBP]}: the {\tt dalek-cryptography bulletproofs} library \cite{dalek-bulletproofs-lib}
     \item {[blake2]}: the Rust implementation \cite{blake2-rust-lib} of hashing algorithm Blake2 \cite{blake-hashing-algorithm}
 \end{itemize}
