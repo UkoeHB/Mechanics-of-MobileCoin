@@ -81,11 +81,10 @@ Since MobileCoin is a very new cryptocurrency, we will not go into detail on hyp
 
 In our quest for comprehensiveness, we have chosen to present all the basic elements of cryptography needed to understand the complexities of MobileCoin, and their mathematical antecedents. In Chapter \ref{chapter:basicConcepts} we develop essential aspects of elliptic curve cryptography.
 
-Chapter \ref{chapter:advanced-schnorr} expands on the Schnorr signature scheme introduced in the prior chapter, and outlines the ring signature algorithms that will be applied to achieve confidential transactions. Chapter \ref{chapter:addresses} explores how MobileCoin uses addresses to control ownership of funds, and the different kinds of addresses.%\ref{chapter:addresses}
+Chapter \ref{chapter:advanced-schnorr} expands on the Schnorr signature scheme introduced in the prior chapter, and outlines the ring signature algorithms that will be applied to achieve confidential transactions. Chapter \ref{chapter:addresses} explores how MobileCoin uses addresses to control ownership of funds, and the different kinds of addresses.
 
-%\ref{chapter:pedersen-commitments}
 %\ref{chapter:membership-proofs}
-In Chapter 5 we introduce the cryptographic mechanisms used to conceal amounts. Chapter 6 is dedicated to membership proofs, which are used to prove MobileCoin transactions spend funds that exist in the blockchain. With all the components in place, we explain the transaction scheme used by MobileCoin in Chapter 7.%\ref{chapter:transactions}
+In Chapter \ref{chapter:pedersen-commitments} we introduce the cryptographic mechanisms used to conceal amounts. Chapter 6 is dedicated to membership proofs, which are used to prove MobileCoin transactions spend funds that exist in the blockchain. With all the components in place, we explain the transaction scheme used by MobileCoin in Chapter 7.%\ref{chapter:transactions}
 
 %\ref{chapter:enclaves}
 We shed light on secure enclaves in Chapter 8, the MobileCoin blockchain is unfolded in Chapter~9, and the MobileCoin consensus protocol used to create the blockchain is elucidated in Chapter 10.%\ref{chapter:consensus}
@@ -112,7 +111,7 @@ Some code references are to third-party libraries, which we tagged with square b
     \item {[blake2]}: the Rust implementation \cite{blake2-rust-lib} of hashing algorithm Blake2 \cite{blake-hashing-algorithm}
 \end{itemize}
 
-To shorten their length, margin notes related to the transaction protocol use the tag [MC-tx], which stands for the directory path `transaction/core/'. Code from an internal code base at MobileCoin (which has not yet been made open source) is tagged with [MC-prop]. Finally, functions that are exclusively executed within SGX secure enclaves are marked with an asterisk `*'.
+To shorten their length, margin notes related to the transaction protocol use the tag [MC-tx], which stands for the directory path `transaction/core/'. Code from an internal code base at MobileCoin (which has not yet been made open source) is tagged with [MC-prop]. Finally, functions that are executed exclusively within SGX secure enclaves are marked with an asterisk `*'.
 
 
 \section{Disclaimer}
@@ -128,10 +127,10 @@ All signature schemes, applications of elliptic curves, and implementation detai
 There are several notable differences between `Mechanics of MobileCoin: First Edition' and `Zero to Monero: Second Edition'.
 
 \begin{itemize}
-    \item Parts of the core content were improved, such as an updated group theory section (Chapter \ref{chapter:basicConcepts}) and better narrative flow in the chapter on transactions (Chapter 7).
+    \item Parts of the core content were improved, such as an updated group theory section (Chapter \ref{chapter:basicConcepts}) and better narrative flow in the chapter on transactions (Chapter 7), or adjusted for MobileCoin, such as the addition of the Ristretto abstraction (Chapter \ref{chapter:basicConcepts}).
     \item Transaction details specific to MobileCoin replaced details specific to Monero (for example, the addition of membership proofs in Chapter 6, which serve a purpose similar to Monero's output offsets).%[[[fix reference]]] \ref{chapter:membership-proofs}
-    \item MobileCoin's consensus model (based in part on the Stellar Consensus Protocol \cite{stellar-consensus-protocol}) replaced Monero's more standard mining-based (Nakamoto \cite{Nakamoto_bitcoin}) consensus mechanism (Chapter 9).
-    \item MobileCoin uses secure enclaves extensively (Chapter 8). They have an important role in MobileCoin's privacy model and are essential to the novel Fog technology (Chapter 10).%[[[fix references]]]\ref{chapter:enclaves}\ref{chapter:fog}
+    \item MobileCoin's consensus model (based in part on the Stellar Consensus Protocol \cite{stellar-consensus-protocol}) replaced Monero's more standard mining-based (Nakamoto \cite{Nakamoto_bitcoin}) consensus mechanism (Chapter 10).
+    \item MobileCoin uses secure enclaves extensively (Chapter 8). They have an important role in MobileCoin's privacy model and are essential to the novel Fog technology (Chapter 11).%[[[fix references]]]\ref{chapter:enclaves}\ref{chapter:fog}
 \end{itemize}
 
 
