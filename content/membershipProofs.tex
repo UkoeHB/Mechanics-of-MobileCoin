@@ -1,0 +1,203 @@
+\chapter{Membership Proofs}
+\label{chapter:membership-proofs} 
+
+A transaction input is just an old output, so verifiers have to check that transaction inputs actually exist in the blockchain. In MobileCoin, transactions are validated inside so-called {\em secure enclaves} (see Chapter \ref{chapter:enclaves}), which are intended to be opaque boxes not open to observers. Doing so makes it possible to hide which inputs were present in a transaction from everyone except the transaction author herself.\footnote{As will be discussed more over the next few chapters, after a transaction has been validated most of its content gets discarded. A transaction that goes into an enclave leaves truncated.}
+
+Enclaves are far too small to contain copies of the entire blockchain, which must be stored in more `visible' parts of a node's machine. If an enclave has to reach out to the local chain to check if a transaction's inputs are legitimate, then it would be easy for the machine's owner to figure out what they are.
+
+We resolve this dilemma by, instead of referencing where old outputs can be found, making copies of them and constructing {\em membership proofs} that show they belong to the blockchain. A membership proof is just a Merkle proof \cite{merkle-tree}.
+
+
+
+\section{Merkle trees}
+\label{sec:merkle-trees}
+
+Merkle trees \cite{merkle-tree} are a simple and effective way of taking a large data set and representing it with a much smaller identifier \cite{merkle-how-log-proofs-work}. They are well-known and see widespread use among blockchain-based technologies \cite{merkle-trees-article}.
+
+
+\subsection{Simple Merkle trees}
+\label{subsec:simple-merkle-trees}
+
+A Merkle tree is a binary hash tree. With a data set containing (for example) items \{A, B, C, D, E, F, G\}, the tree is constructed by hashing each pair consecutively. When no more hashes are possible, you have reached the {\em root hash} which represents the entire data set. In the following diagram a black arrow indicates a hash of inputs.
+
+%http://texdoc.net/texmf-dist/doc/latex/forest/forest-doc.pdf especially ch. 2
+\begin{center}
+    \begin{forest}
+        forked edges,
+        for tree = {grow'=90, 
+                    edge = {<-, > = triangle 60},
+                    fork sep = 4.5 mm,
+                    l sep = 8 mm,
+                    s sep = 12 mm,
+                    rectangle, draw
+                    },
+        sn edges,
+        where n children=0{tier=terminus}{},
+        [Merkle Root
+            [$Hash$ ABCD
+                [$Hash$ AB
+                    [A]
+                    [B]
+                ]
+                [$Hash$ CD
+                    [C]
+                    [D]
+                ]
+            ]
+            [$Hash$ EFGx
+                [$Hash$ EF
+                    [E]
+                    [F]
+                ]
+                [$Hash$ Gx
+                    [G]
+                    [x]
+                ]
+            ]
+        ]
+        \node at (current bounding box.south)
+        [below=3ex,thick,draw,rectangle]
+        {\emph{Diagram \ref*{chapter:membership-proofs}-1: Merkle Tree}};
+    \end{forest}
+\end{center}
+
+We append a `filler', or `nil', value called $x$ to the end so the tree is a complete binary structure. Fillers aren't a mandatory part of Merkle trees, but will be useful in MobileCoin membership proofs.
+
+Usually items are hashed individually before being hashed into a pair \cite{merkle-trees-article, merkle-how-log-proofs-work}. It isn't that important for our discussion here whether items \{A, B, C, ...\} represent data objects or their hashes.\footnote{In the case of MobileCoin, leaf nodes are always hashes of the data objects they represent.} The original inputs to a Merkle tree are called `leaf nodes', middle hashes are `intermediate nodes', filler nodes that don't represent any data elements (at any level of the tree) are `nil nodes', and the final hash is a `root node'.\footnote{For MobileCoin Merkle proofs, the hashes to create leaf nodes, intermediate nodes, and nil nodes are each\marginnote{[MC-tx] src/member- ship\_proofs/ mod.rs} domain separated (the root hash is treated as an intermediate node). Doing so provides `defense-in-depth' \cite{defense-in-depth-forcepoint, defense-in-depth-imperva} against second preimage attacks \cite{merkle-second-preimage-attacks} alongside the de facto defense of implementation robustness.}
+
+
+\subsection{Simple inclusion proofs}
+\label{subsec:merkle-simple-inclusion-proofs}
+
+To prove that element C belongs to the data set, only nodes \{C, D, $Hash$ AB, $Hash$ EFGx\} are required. A verifier may reconstruct the prover's Merkle root from those nodes, and compare it with the expected value.
+
+\begin{center}
+    \begin{forest}
+        forked edges,
+        for tree = {grow'=90, 
+                    edge = {<-, > = triangle 60},
+                    fork sep = 4.5 mm,
+                    l sep = 8 mm,
+                    s sep = 12 mm,
+                    rectangle, draw
+                    },
+        sn edges,
+        where n children=0{tier=terminus}{},
+        [Merkle Root
+            [$Hash$ ABCD
+                [$Hash$ AB, fill=blue!30
+                    [-]
+                    [-]
+                ]
+                [$Hash$ CD
+                    [C, fill=green]
+                    [D, fill=blue!30]
+                ]
+            ]
+            [$Hash$ EFGx, fill=blue!30
+                [-
+                    [-]
+                    [-]
+                ]
+                [-
+                    [-]
+                    [-]
+                ]
+            ]
+        ]
+        \node at (current bounding box.south)
+        [below=3ex,thick,draw,rectangle]
+        {\emph{Diagram \ref*{chapter:membership-proofs}-2: Proof of Membership}};
+    \end{forest}
+\end{center}
+%how to align the hash nodes properly?
+
+In our example, the input elements are three layers deep. A Merkle proof for any node $m$ layers deep requires $m + 1$ nodes (including itself) to verify. In other words, if there are $2^{n-1} < N <= 2^n$ total items in the data set, it will take $n + 1$ nodes to construct a given leaf node's proof. Since we use fillers, the leaf node layer will always have $2^n$ entries.
+
+
+\section{Membership proofs}
+\label{sec:merkle-membership-proofs}
+
+To prove elements B and G belong to the same data set we only need two Merkle proofs that create the same root hash. This offers a method for secure enclaves to verify a given output belongs to the blockchain without leaking to its local machine which output it is verifying.
+
+In broad strokes\marginnote{[MC-tx] src/valida- tion.rs {\tt validate\_ membership\_ proofs()}}, the enclave receives a transaction containing an output with a Merkle proof of membership. It requests a Merkle proof from the local machine corresponding to some other output. Finally, it compares the resulting root hashes of the two proofs. If they match, then the transaction's output must belong to the local machine's data set.
+
+
+\subsection{Highest index element proofs}
+\label{subsec:merkle-highest-index-proofs}
+
+When new elements are appended to a data set, root hashes for new Merkle proofs will not match root hashes for older proofs. This means, given an old proof, we can't verify it by simply obtaining a new proof for any random element. Instead we must get a proof {\em as if created at the same time as our old proof}.
+
+One approach is to pretend all the new elements added since our old proof was made don't exist, and use that truncated data set to construct a proof for a random element. However, if the data set contains 4.3 billion elements ($2^{32}$), then a single proof from scratch will cost almost 8.6 billion hashes (one per leaf node, plus all the intermediate nodes)!\\
+
+Instead, we precompute\marginnote{ledger/db/ src/tx\_out\_ store.rs {\tt push()}} all the nodes in the data set's Merkle tree, continuously updating the nodes that change whenever a new element is added. To validate an old membership proof, we get a new proof for the element that was at the very end of the data set (e.g.\ blockchain) when our to-be-validated proof was made.
+
+Within any data set the last element is unique. Its proof does not contain any `partial' nil nodes. All proof nodes are either `complete' (representing a full set of elements), or `empty' (representing filler elements).\footnote{In MobileCoin all pure nil nodes\marginnote{[MC-tx] src/member- ship\_proofs/ mod.rs {\tt hash\_nil()}} are identical, no matter what level of the tree they are found in. Partial nil nodes are constructed like normal as a hash of inputs (e.g.\ a hash of normal node and pure nil node).} Take the following tree for example (Diagram \ref*{chapter:membership-proofs}-3), with highest element E's proof nodes highlighted.%\footnote{The last element has this unique property because all nodes `above' it are nil nodes, and all nodes `below' it are complete nodes. When two nodes are combined, it is always a combination of adjacent ranges of represented leaf nodes. Moreover, proof nodes never overlap (for example, only the leaf node E will contain E in the diagram). Therefore no proof node for a last element proof will straddle the leaf-node-layer boundary between elements and fillers.}
+
+\begin{center}
+    \begin{forest}
+        forked edges,
+        for tree = {grow'=90, 
+                    edge = {<-, > = triangle 60},
+                    fork sep = 4.5 mm,
+                    l sep = 8 mm,
+                    s sep = 12 mm,
+                    rectangle, draw
+                    },
+        sn edges,
+        where n children=0{tier=terminus}{},
+        [Merkle Root
+            [$Hash$ ABCD, fill=blue!30
+                [$Hash$ AB
+                    [A]
+                    [B]
+                ]
+                [$Hash$ CD
+                    [C]
+                    [D]
+                ]
+            ]
+            [$Hash$ Exxx
+                [$Hash$ Ex
+                    [E, fill=green]
+                    [x, fill=blue!30]
+                ]
+                [$Hash$ xx, fill=blue!30
+                    [x]
+                    [x]
+                ]
+            ]
+        ]
+        \node at (current bounding box.south)
+        [below=3ex,thick,draw,rectangle]
+        {\emph{Diagram \ref*{chapter:membership-proofs}-3: Highest Element Membership Proof}};
+    \end{forest}
+\end{center}
+
+The absence of partial nil nodes is significant because it lets us easily `simulate'\marginnote{[MC-tx] src/member- ship\_proofs/ mod.rs {\tt derive\_ proof\_at\_ index()}} any state of the data set. Using a normal, up-to-date proof for the element that was at the highest index of that old data set, treat all `right-hand' nodes (i.e.\ nodes `above' the proof element) in the proof as nil nodes. The root hash of that simulated proof equals the old data set's root hash.
+
+Current proofs that are convertible to simulated proofs have an additional property. Suppose you have multiple old proofs each made at a different state of the data set. The current proofs used to verify them will be on different elements (corresponding to different old highest indices). However,\marginnote{*consensus/ enclave/ impl/src/ lib.rs {\tt tx\_is\_well\_ formed()}} the non-simulated versions of those proofs all have the same root hash (representing the current data set). This is useful in MobileCoin because current proofs are obtained from outside secure enclaves. By comparing the proofs' root hashes, validator enclaves can be sure all old proofs are verified with respect to the same data set.\footnote{Comparing current proof root hashes occurs in two places in MobileCoin. When a transaction is validated, current proofs obtained by the validating enclave from the local machine must have the same root hash. Then when a block is being assembled, the current proofs stored with all transactions' inputs in that block must have the same\marginnote{*consensus/ enclave/im- pl/src/lib.rs {\tt form\_block()}} root hash. These requirements make it more difficult for validator node operators to trick their enclaves or observers of the blockchain (see Section~\ref{sec:blockchain-beyond-validation-framework}).}
+
+One final note. The size of the binary tree for a proof is based on the size of its data set. In other words, how many entries the leaf node layer has is the next power of two above (or equal to, if your indexing starts at 1) the highest element's index. This is true for simulated proofs as well, so the number of elements in the `current' data set is irrelevant for verifying old proofs.
+
+
+\subsection{MobileCoin membership proofs}
+\label{subsec:mobilecoin-membership-proofs}
+
+%[[[revisit if member proofs are simplified]]]
+The MobileCoin blockchain consists mainly of transaction outputs, which are added sequentially as new transactions are submitted and verified (see Chapter \ref{chapter:blockchain}). However, as mentioned, transaction verifiers (secure enclaves, see Chapter \ref{chapter:enclaves}) are unable to read the blockchain directly. As such, old outputs spent by transactions must have corresponding membership proofs that show they exist in the blockchain record.
+
+Membership proofs include the highest output index at the time they were produced. To\marginnote{consensus/ service/src/ tx\_manager/ mod.rs {\tt is\_well\_ formed()}} verify a membership proof, the verifying secure enclave obtains a current proof from the insecure local machine for the output at that old proof's `highest index', simulates the old data set, and compares the old and simulated proofs' root hashes. Since the current proof reveals almost nothing about the membership proof being verified (only approximately how old it is), the outputs being spent in a transaction are safely hidden from node operators.
+
+A MobileCoin transaction input's membership proof has the following content\marginnote{[MC-tx] src/tx.rs}.
+
+\begin{enumerate}
+    \item {\tt index}: The on-chain index $i^{element}$ of the output being proven a member of the blockchain.
+    \item {\tt highest\_index}: The index $i^{highest}$ of the last output in the blockchain at the time this proof was created. It is used\marginnote{*consensus/ service/src/ validator.rs {\tt well\_for- med\_check()}} to make a comparison proof for validating this membership proof.
+    \item Proof elements: one per node in the proof.\footnote{In MobileCoin transactions a copy of the input (a.k.a.\ the old output) is stored separately from its membership proof. Representing a mild case of duplication, the output's leaf node hash is included\marginnote{[MC-tx] src/member- ship\_proofs/ mod.rs {\tt is\_member- ship\_proof\_ valid()}} among the proof elements.}
+    \begin{enumerate}
+        \item {\tt range}: The range of elements this node represents. It is a pair of indices $[i^{low}, i^{high}]$. A node ranging [0, 3] represents elements \{0, 1, 2, 3\}. The range is used to determine if a node is on the `left' or `right' when creating its parent node. For example\marginnote{[MC-tx] src/member- ship\_proofs/ mod.rs {\tt compose\_ adjacent\_ membership\_ elements()}}, with two nodes X and Y ranging [0, 3] and [4, 7], they are composed into XY = $\mathcal{H}$(X, Y), with the lower range on the left.\footnote{The hash function for making nodes is $\mathcal{H}_{Blake2b256}()$ (which was mentioned in footnote \ref{footnote:private-keys-and-blake2b256} of Section \ref{sec:one-time-addresses}). Leaf nodes are $\mathcal{H}_{Blake2b256}(\mathcal{H}_{32}(\textrm{\tt TxOut}))$, using the hash function $\mathcal{H}_{32}()$ to condense transaction outputs. $\mathcal{H}_{32}()$ is a hash function that outputs a 32-byte digest. Internally it uses the {\em Keccak} hashing algorithm, albeit via the `Merlin transcript' interface \cite{merlin-transcripts} provided by the {\tt dalek-cryptography merlin} library \cite{dalek-merlin-lib}.}\footnote{Technically element ranges could be inferred from each node's position in the element list, along with the highest index. Perhaps future versions of the MobileCoin protocol will simplify membership proofs by making ranges implicit.}
+        \item {\tt hash}: The node hash $h^{node}$, used in combination with other node hashes to reconstruct the proof's root hash.
+    \end{enumerate}
+\end{enumerate}
+
