@@ -180,8 +180,8 @@
 {\par\centering \textsc{\LARGE exploring the foundations of a private digital currency}\par}
 \bigskip
 %{\par\centering \textsc{\LARGE Published \today{} (v1.0.0)}\par}
-%{\par\centering \textsc{\LARGE \today{}, Draft v0.0.27}\par}
-{\par\centering \textsc{\LARGE \today{}, Preview (6/11) v0.0.27}\par}
+%{\par\centering \textsc{\LARGE \today{}, Draft v0.0.28}\par}
+{\par\centering \textsc{\LARGE \today{}, Preview (7/11) v0.0.28}\par}
 \bigskip
 {\par\centering \textsc{\large koe\footnote{ukoe@protonmail.com}\footnote{Author `koe' worked on this document as part of a private contract with MobileCoin, Inc.}}
 \par}
@@ -231,7 +231,7 @@
 \pagestyle{fancy}
 
 % -------- Chapters ----------------------------
-
+\if 11
 \include{content/introduction}
 
 %\part{Essentials}
@@ -240,10 +240,10 @@
 \include{content/addresses}
 \include{content/commitments}
 \include{content/membershipProofs}
-\if 01
-%\include{content/transactions}
+\include{content/transactions}
+\fi\if 01
 %\include{content/enclave}
-%\include{content/blockchain}
+\include{content/blockchain}
 \include{content/consensus}
 
 %\part{Extensions}
