@@ -83,14 +83,66 @@ Group signatures are a way of proving a signer belongs to a group, without neces
 Liu {\em et al.} presented a more interesting scheme in \cite{Liu2004} building on the work of Rivest {\em et al.} in \cite{rivest-leak-secret}. The authors detailed a group signature algorithm called LSAG characterized by three properties: {\em anonymity, linkability,} and {\em spontaneity}.\footnote{A spontaneous signature is one that can be constructed without the cooperation of any non-signer (e.g.\ any third party). \cite{Liu2004}} Here we discuss SAG, the non-linkable version of LSAG, for conceptual clarity. We reserve the idea of linkability for later sections.
 \\
 
-Schemes with anonymity and spontaneity are typically referred to as `ring signatures'. In the context of MobileCoin they will ultimately allow for unforgeable, signer-ambiguous transactions that leave currency flows largely untraceable.
+Schemes with anonymity and spontaneity are typically referred to as `ring signatures'. In the context of MobileCoin they will ultimately allow for unforgeable, signer-ambiguous transactions that leave currency flows largely untraceable even in the case of secure enclave failures.
+
+
+\subsection*{Ring signatures primer}
+
+The feasibility of ring signatures follows from one simple observation. As long as the challenge used to define a Schnorr signature's response both depends on $\alpha G$ and is uniformly distributed, we have a lot of freedom when defining it. A simple example would be hashing the challenge a second time (compared to normal), as in the following made-up signature scheme.
+
+\begin{enumerate}
+	\item Generate random number $\alpha \in_R \mathbb{Z}_l$, and compute $\alpha G$.
+
+	\item Calculate the intermediate challenge, \(c_i = \mathcal{H}(\mathfrak{m},[\alpha G])\).
+
+	\item Calculate the real challenge, \(c_r = \mathcal{H}([c_i G])\).
+
+	\item Define the response, $r = \alpha - c_r*k$.
+
+	\item Publish the signature $(c_r, r)$.
+\end{enumerate}
+
+A verifier would then compute:
+
+\begin{enumerate}
+	\item Calculate the intermediate challenge: \(c'_i = \mathcal{H}(\mathfrak{m},[r G + c_r*K])\).
+
+    \item Calculate the real challenge: \(c'_r = \mathcal{H}([c'_i G])\).
+
+	\item If $c_r = c'_r$ then the signature passes.
+\end{enumerate}
+
+If, however, the real challenge computation is indistinguishable from the intermediate challenge computation, then it becomes possible to hide which one corresponds to the true signer (given a real signer $K_r$ and fake signer $K_f$). Here is an example signature scheme.
+
+\begin{enumerate}
+	\item Generate random number $\alpha \in_R \mathbb{Z}_l$, and compute $\alpha G$.
+
+	\item Calculate the intermediate challenge, \(c_i = \mathcal{H}(\mathfrak{m},[\alpha G])\).
+	
+	\item Generate an intermediate response $r_i \in_R \mathbb{Z}_l$. Calculate the real challenge based on fake signer $K_f$,\vspace{.115cm}
+	\[c_r = \mathcal{H}(\mathfrak{m},[r_i G + c_i*K_f])\]
+
+	\item Define the real response, $r_r = \alpha - c_r*k_r$.
+
+	\item Randomize the order of tuples $\{c_i, r_i, K_f\}$, $\{c_r, r_r, K_r\}$ and assign them numbers 1 or 2. Publish the signature $(c_1, r_1, r_2, K_1, K_2)$.
+\end{enumerate}
+
+The verifier computes:
+
+\begin{enumerate}
+	\item Calculate the second challenge: \(c'_2 = \mathcal{H}(\mathfrak{m},[r_1 G + c_1*K_1])\).
+
+    \item Calculate the first challenge: \(c'_1 = \mathcal{H}(\mathfrak{m},[r_2 G + c'_2*K_2])\).
+
+	\item If $c_1 = c'_1$ then the signature passes, and the verifier can't tell if $K_1$ or $K_2$ was the signer.
+\end{enumerate}
 
 
 \subsection*{Signature}
 
-Ring signatures are composed of a ring and a signature. Each {\em ring} is a set of public keys, one of which belongs to the signer and the rest of which are unrelated. The {\em signature} is generated with that ring of keys, and anyone verifying it would not be able to tell which ring member was the actual signer.
+Ring signatures are composed of a ring and a signature. Each {\em ring} is a set of public keys, one of which belongs to the signer and the rest of which are unrelated. The {\em signature} is generated with that ring of keys, and anyone who verified it would not be able to tell which ring member was the actual signer.
 
-Our Schnorr-like signature scheme in Section \ref{sec:signing-messages} can be considered a one-key ring signature. We get to two keys by, instead of defining $r$ right away, generating a decoy $r'$ and creating a new challenge to define $r$ with.
+Our Schnorr-like signature scheme in Section \ref{sec:signing-messages} can be considered a one-key ring signature. As discussed in the primer, we get to two keys by, instead of defining $r$ right away, generating a decoy $r'$ and creating a new challenge to define $r$ with.
 \\
 
 Let \(\mathfrak{m}\) be the message to sign, \(\mathcal{R} = \{K_1, K_2, ..., K_n\}\) a set of distinct public keys (a group/ring), and \(k_\pi\) the signer's private key corresponding to his public key \(K_\pi \in \mathcal{R}\), where $\pi$ is a secret index.
@@ -98,7 +150,7 @@ Let \(\mathfrak{m}\) be the message to sign, \(\mathcal{R} = \{K_1, K_2, ..., K_
 \begin{enumerate}
 	\item Generate random number \(\alpha \in_R \mathbb{Z}_l\) and fake responses  \(r_i \in_R \mathbb{Z}_l\) for \(i \in \{1, 2, ..., n\}\) but excluding \(i = \pi\).
 
-	\item Calculate\footnote{The challenge $c_{\pi + 1}$ is indexed $\pi + 1$ because it is the input to the challenge produced for the ring member $K_{\pi + 1}$.}
+	\item Calculate%\footnote{The challenge $c_{\pi + 1}$ is indexed $\pi + 1$ because it is the input to the challenge produced for the ring member $K_{\pi + 1}$.}
 	\[c_{\pi+1} = \mathcal{H}_n(\mathcal{R}, \mathfrak{m}, [\alpha G])\]
 
 	\item For \(i = \pi+1, \pi+2, ..., n, 1, 2, ..., \pi-1\) calculate, replacing \(n + 1 \rightarrow 1\),\vspace{.175cm}
@@ -187,7 +239,7 @@ The modification was formalized in \cite{MRL-0005-ringct} based on a publication
 As with SAG, let \(\mathfrak{m}\) be the message to sign, \(\mathcal{R} = \{K_1, K_2, ..., K_n\}\) a set of distinct public keys, and \(k_\pi\) the signer's private key corresponding to his public key \(K_\pi \in \mathcal{R}\), where $\pi$ is a secret index. Assume the existence of a hash function \(\mathcal{H}_p\) that maps to curve points in EC.\footnote{It doesn’t matter if points from $\mathcal{H}_p$ are compressed or not. They can always be decompressed. In our case, the function outputs a point in extended coordinates.}\footnote{MobileCoin uses a hash function\marginnote{[dalek25519] src/ristretto.rs {\tt from\_ha- sh<Blake2b>()}} that returns curve points directly, rather than computing some integer that is then multiplied by $G$. $\mathcal{H}_p$ would be broken if someone discovered a way to find $n_x$ such that $n_x G = \mathcal{H}_p(x)$. See a description of the Ristretto-flavored hash-to-point algorithm Elligator in \cite{ristretto-elligator}, which is used by MobileCoin, and note that the input is hashed to 64 bytes with BLAKE2b before being passed to Elligator.}
 
 \begin{enumerate}
-	\item Calculate key image \(\tilde{K} = k_\pi \mathcal{H}_p(K_\pi)\).\footnote{In MobileCoin it's important to use the hash to point function for key images instead of another base point so linearity doesn't lead to linking signatures created by the same address (even if for different one-time addresses). See \cite{cryptoNoteWhitePaper} page 18.}
+	\item Calculate key image \(\tilde{K} = k_\pi \mathcal{H}_p(K_\pi)\).\footnote{In MobileCoin it is important to use the hash to point function for key images instead of another base point so linearity doesn't lead to linking signatures created by the same address (even if for different one-time addresses). See \cite{cryptoNoteWhitePaper} page 18.}
 
 	\item Generate random number \(\alpha \in_R \mathbb{Z}_l\) and random numbers \(r_i \in_R \mathbb{Z}_l\) for \(i \in \{1, 2, ..., n\}\) but excluding \(i = \pi\).
 
