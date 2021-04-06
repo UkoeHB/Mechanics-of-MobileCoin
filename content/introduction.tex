@@ -30,7 +30,7 @@ We intend to address this situation by introducing the fundamental concepts nece
 
 To provide the best experience for our readers, we have taken care to build a constructive, step-by-step description of the MobileCoin cryptocurrency.
 
-In the first edition of this report we have centered our attention on version 1 of the MobileCoin protocol\footnote{The `protocol' is the set of rules that each new block is tested against before it can be added to the blockchain. This set of rules includes the `transaction protocol' (currently version 1, which we call {\tt TXTYPE\_RCT\_1} for clarity), which are general rules pertaining to how a transaction is constructed.}, corresponding to version 1.0.1 of the MobileCoin software suite. All transaction and blockchain-related mechanisms described here belong to those versions.\footnote{The MobileCoin codebase's integrity and reliability is predicated on assuming enough people have reviewed it to catch most or all significant errors. We hope that readers will not take our explanations for granted, and verify for themselves the code does what it's supposed to. If it does not, we hope you will make a responsible disclosure (by emailing \url{security@mobilecoin.foundation}) for major problems, or Github `issue' or `pull request' (\url{https://github.com/mobilecoinfoundation/mobilecoin}) for minor issues.}%[[[revisit]]]\footnote{Several protocols worth considering for the next generation of MobileCoin transactions are undergoing research and investigation, including Triptych \cite{triptych-preprint}, RingCT3.0 \cite{ringct3-preprint}, Omniring \cite{omniring-paper}, and Lelantus \cite{lelantus-preprint}.}
+In the first edition of this report we have centered our attention on the launch version of the MobileCoin protocol\footnote{The `protocol' is the set of rules that each new block is tested against before it can be added to the blockchain. This set of rules includes the `transaction protocol' (currently version 1, which we call {\tt TXTYPE\_RCT\_1} for clarity), which are general rules pertaining to how a transaction is constructed.}\footnote{In the launch protocol, blocks store a `block version' set to 0. Semantically, this version number can be thought of as the number of protocol updates (i.e.\ scheduled hard forks) that have occurred since launch.}, corresponding to version 1.0.1 of the MobileCoin software suite. All transaction and blockchain-related mechanisms described here belong to those versions.\footnote{The MobileCoin codebase's integrity and reliability relies on enough people reviewing it to catch most or all significant errors. We hope that readers will not take our explanations for granted, and verify for themselves the code does what it's supposed to. If it does not, we hope you will make a responsible disclosure (by emailing \url{security@mobilecoin.foundation}) for major problems, or Github `issue' or `pull request' (\url{https://github.com/mobilecoinfoundation/mobilecoin}) for minor issues.}%[[[revisit]]]\footnote{Several protocols worth considering for the next generation of MobileCoin transactions are undergoing research and investigation, including Triptych \cite{triptych-preprint}, RingCT3.0 \cite{ringct3-preprint}, Omniring \cite{omniring-paper}, and Lelantus \cite{lelantus-preprint}.}
 
 
 
@@ -85,19 +85,17 @@ Chapter \ref{chapter:advanced-schnorr} expands on the Schnorr signature scheme i
 
 In Chapter \ref{chapter:pedersen-commitments} we introduce the cryptographic mechanisms used to conceal amounts. Chapter \ref{chapter:membership-proofs} is dedicated to membership proofs, which are used to prove MobileCoin transactions spend funds that exist in the blockchain. With all the components in place, we explain the transaction scheme used by MobileCoin in Chapter \ref{chapter:transactions}.
 
-We shed light on secure enclaves in Chapter \ref{chapter:enclaves}, the MobileCoin blockchain is unfolded in Chapter~9, and the MobileCoin consensus protocol used to create the blockchain is elucidated in Chapter 10.%\ref{chapter:consensus}
+We shed light on secure enclaves in Chapter \ref{chapter:enclaves}, the MobileCoin blockchain is unfolded in Chapter~\ref{chapter:blockchain}, and the MobileCoin consensus protocol used to create the blockchain is elucidated in Chapter \ref{chapter:consensus}.
 
 
 \subsection{Extensions}
 
-A cryptocurrency is more than just its protocol. As part of MobileCoin's original design, a `service-layer' technology known as Fog was developed. Discussed in Chapter 11, Fog is a service that searches the blockchain and identifies transaction outputs owned by its users. This allows users to avoid scanning the blockchain themselves, which is time-consuming and resource-intensive (a prohibitive burden for e.g.\ mobile devices). Importantly, the service operator is not able to learn more than approximately how many outputs its users own.%\ref{chapter:fog}
+A cryptocurrency is more than just its protocol. As part of MobileCoin's original design, a `service-layer' technology known as Fog was developed. Discussed in Chapter \ref{chapter:fog-service}, Fog is a service that searches the blockchain and identifies transaction outputs owned by its users. This allows users to avoid scanning the blockchain themselves, which is time-consuming and resource-intensive (a prohibitive burden for e.g.\ mobile devices). Importantly, the service operator is not able to learn more than approximately how many outputs its users own.
 
 
 \subsection{Additional content}
-%\ref{appendix:RCTTypeBulletproof2}
-%\ref{appendix:block-content}
-%\ref{appendix:origin-block}
-Appendix A explains the structure of a sample transaction that was submitted to the blockchain. Appendix B explains the structure of blocks in MobileCoin's blockchain. Finally, Appendix C brings our report to a close by explaining the structure of MobileCoin's origin (a.k.a.\ genesis) block. These provide a connection between the theoretical elements described in earlier sections with their real-life implementation.
+
+Appendix \ref{appendix:TXTYPE_RCT_1} explains the structure of a sample transaction that was submitted to the blockchain. Appendix \ref{appendix:block-content} explains the structure of blocks in MobileCoin's blockchain. Finally, Appendix \ref{appendix:origin-block} brings our report to a close by explaining the structure of MobileCoin's origin (a.k.a.\ genesis) block. These provide a connection between the theoretical elements described in earlier sections with their real-life implementation.
 
 We\marginnote{Isn't this useful?} use margin notes to indicate where MobileCoin implementation details can be found in the source code.\footnote{Our margin notes are accurate for version 1.0.1 of the MobileCoin software suite, but may gradually become inaccurate as the codebase is constantly changing. However, the code is stored in a git repository (\url{https://github.com/mobilecoinfoundation/mobilecoin}), so a complete history of changes is available.} There is usually a file path, such as transaction/std/src/transaction\_builder.rs, and a function, such as \(\textrm{{\tt create\_output()}}\). Note: `-' indicates split text, such as Ristretto- Point $\rightarrow$ RistrettoPoint, and we neglect namespace qualifiers (e.g.\ {\tt TransactionBuilder::}) in most cases.
 
@@ -109,7 +107,8 @@ Some code references are to third-party libraries, which we tagged with square b
     \item {[blake2]}: the Rust implementation \cite{blake2-rust-lib} of hashing algorithm Blake2 \cite{blake-hashing-algorithm}
 \end{itemize}
 
-To shorten their length, margin notes related to the transaction protocol use the tag [MC-tx], which stands for the directory path `transaction/core/'. Code from an internal code base at MobileCoin (which has not yet been made open source) is tagged with [MC-prop]. Finally, functions that are executed exclusively within SGX secure enclaves are marked with an asterisk `*'.
+To shorten their length, margin notes related to the transaction protocol use the tag [MC-tx], which stands for the directory path `transaction/core/'. Code from MobileCoin's Fog implementation~\cite{mobilecoin-fog-source-code} is tagged with [MC-fog]. Finally, functions that are executed exclusively within SGX secure enclaves are marked with an asterisk `*'.
+
 
 
 \section{Disclaimer}
@@ -127,8 +126,8 @@ There are several notable differences between `Mechanics of MobileCoin: First Ed
 \begin{itemize}
     \item Parts of the core content were improved, or adjusted for MobileCoin. For example, there is an updated group theory section, and also a discussion of the Ristretto abstraction, in Chapter~\ref{chapter:basicConcepts}. More generally, the early chapters have been edited in various small ways.
     \item Transaction details specific to MobileCoin replaced details specific to Monero (for example, the addition of membership proofs in Chapter \ref{chapter:membership-proofs}, which serve a purpose similar to Monero's output offsets).
-    \item MobileCoin's consensus protocol (an implementation of the Stellar Consensus Protocol \cite{stellar-consensus-protocol}) replaced Monero's more standard mining-based (Nakamoto \cite{Nakamoto_bitcoin}) consensus mechanism (Chapter 10).
-    \item MobileCoin uses secure enclaves extensively (Chapter \ref{chapter:enclaves}). They have an important role in MobileCoin's privacy model and are essential to the Fog technology (Chapter 11).%[[[fix references]]]\ref{chapter:fog}
+    \item MobileCoin's consensus protocol (an implementation of the Stellar Consensus Protocol \cite{stellar-consensus-protocol}) replaced Monero's more standard mining-based (Nakamoto \cite{Nakamoto_bitcoin}) consensus mechanism (Chapter \ref{chapter:consensus}).
+    \item MobileCoin uses secure enclaves extensively (Chapter \ref{chapter:enclaves}). They have an important role in MobileCoin's privacy model and are essential to the Fog technology (Chapter \ref{chapter:fog-service}).
 \end{itemize}
 
 

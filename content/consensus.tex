@@ -1,0 +1,449 @@
+\chapter{MobileCoin Consensus Protocol}
+\label{chapter:consensus}
+
+Federated Byzantine agreement (FBA) is a model for reaching consensus in a network composed of nodes. It's most essential feature is the quorum slice, from which quorums and the federated voting procedure are derived. A consensus protocol is said to employ the FBA model if it relies on quorum slices and federated voting. The Stellar Consensus Protocol (SCP) is one example, wherein nodes reach consensus on abstract `statements'. MobileCoin's consensus protocol is a concrete implementation of SCP where the statements consensuated are blocks to be added to the blockchain.
+
+The material in this chapter was primarily sourced from Mazi{\`e}res' original SCP whitepaper \cite{stellar-consensus-protocol} and MobileCoin's source code \cite{mobilecoin-source-code}, with many of the supporting arguments based on original research. Additional useful resources include \cite{simplified-scp}, \cite{understanding-scp-glickstein}, \cite{fast-secure-global-payments-stellar}, \cite{safety-liveness-stellar}, and \cite{scp-ietf-draft}.
+
+
+
+\section{Quorum slices and quorums}
+\label{sec:consensus-quorum-slices-quorums}
+
+Let's consider the perspective of a single node in a distributed network of many nodes. This node participates in the network to learn about (and help create) arbitrary `statements' that other nodes agree to accept as permanent facts. For example, the node may want to validate and maintain a useful local copy of a cryptocurrency blockchain. A `useful' blockchain is one that accurately records all transactions users of the cryptocurrency are likely to submit future transactions with respect to.\footnote{In the case of MobileCoin, a useful blockchain records all transaction {\em outputs} (and key images) that future transactions will be submitted with respect to.}
+
+However, it is not obvious which other visible nodes in the network are maintaining a useful blockchain. Any node could be malicious or inaccessible to users.\footnote{In a blockchain-based technology using proof-of-work, nodes can find the most useful blockchain by hunting for the chain with the highest cumulative difficulty \cite{Nakamoto_bitcoin}. Cumulative difficulty reflects energy expenditure, so it can't be counterfeited without breaking the proof-of-work hash algorithm. This makes it a reliable signal for identifying consensus.} As a consequence, our node must choose to {\em trust} some group of nodes. Practically speaking, if a trusted group of nodes all agree with our node on what block should be added to the blockchain next, then our node should be willing to accept that result.\footnote{This dynamic where nodes willfully trust other nodes is similar to the relationship between cryptocurrency users and nodes. Users have no choice but to trust the nodes they communicate with.} We call trusted groups {\em quorum slices}.
+
+It makes sense for all nodes in the network to operate using the same rules. If a node only accepts results that its quorum slice agrees on, but the nodes in that slice also require agreement from their own slices, then a result can only appear when agreement is reached between all the unique nodes found by tracing slices. The final group\marginnote{consensus/ scp/src/quo- rum\_set.rs {\tt findQuorum- Helper()}} of nodes (the `transitive closure' of quorum slices) is called a {\em quorum}.\footnote{A `quorum' is generally considered the minimum number of participants in a deliberative system that must agree in order for the system to make a decision on the content of deliberation.} Keep in mind that a quorum always includes the node that defined it.
+
+Quorums are defined from the point of view of a single node's quorum slice, so it is likely that different nodes will see different quorums. However, if two nodes' quorums overlap then it isn't possible for the two nodes to finalize different results (e.g.\ decide to add different blocks to the blockchain), because it isn't possible for the overlapping nodes in their quorums to accept more than one final result. It is this property of {\em intersecting quorums} that allows networks to reach broad consensus on results.
+
+
+\subsection{Multiple quorum slices}
+\label{subsec:consensus-multiple-quorum-slices}
+
+To complicate matters a bit, nodes are free to define multiple quorum slices. However, each node only contributes one quorum slice to each quorum it is a member of. This means if nodes in the network each have many quorum slices, then each node will see a large number of quorums corresponding to the various combinations of slices it can trace out.
+
+Defining more than one slice is useful in case a node in one slice gets compromised by an attacker or is unresponsive. Such misbehaving nodes could block the slice's owner from seeing agreement for a full quorum, or convince the owner it should accept a result inconsistent with a different part of the network.\footnote{Misbehaving nodes are said to represent `Byzantine failures', after the famous Byzantine generals problem~\cite{byzantine-generals-lamport}. FBA includes the word `Byzantine' because it is designed to allow network agreement even in the presence of (some) Byzantine failures.}\footnote{There is a trade-off to consider when defining quorum slices. Small slices lead to small sets of overlapping nodes between intersecting quorums, which means if there are enough misbehaving overlapping nodes they could break quorum intersections by telling different nodes they want to finalize different statements. The end result could be network divergence, where parts of the network accept different results. Large sets reduce that risk by increasing the number of nodes in quorum intersections, so more nodes must be compromised to convince a quorum to accept a divergent result. On the other hand, a misbehaving node could be unresponsive, blocking any quorum it participates in from finalizing any result, so the more quorums it is a member of the more it can block. It is considered better for agreement to fail than for the network to diverge, because pursuit of agreement can be iteratively attempted, while healing divergences is a risky endeavor since finalized results may have irreversible effects on the network's users. For this reason large quorum slices are preferable.}
+
+Even with many quorum slices, if enough slice nodes are misbehaving then a well-behaved node can still get blocked or poisoned into accepting results inconsistent with other parts of the network (which are healthy). Such a node is called {\em befouled}, while healthy nodes are {\em intact}. Ultimately a befouled node has trusted the wrong nodes, and must take responsibility for those bad decisions. A consensus protocol based on quorum slices can only guarantee broad consensus on results for intact nodes.
+
+
+\subsection{Quorum sets}
+\label{subsec:consensus-quorum-sets}
+
+Exactly how node operators define their quorum slices is an implementation detail which we would normally neglect, however the approach used by default in MobileCoin will be important to understand for Section \ref{subsec:consensus-nomination}.\footnote{While implementation details are mostly out-of-scope for this document, they are not unimportant. As discussed in \cite{fast-secure-global-payments-stellar}, it is imperative that nodes configure their quorum slices based on robust guidelines, lest the network be prone to diverging (disconnected quorums) or halting (no full quorums are available due to outages).}
+
+It may be the case that a node operator trusts some nodes more than others. Well-trusted nodes can be members of relatively more quorum slices, because they are less likely to misbehave (according to the node operator's estimation). To that end, quorum slices are generated automatically from a tree-like {\em quorum set}\marginnote{consensus/ scp/src/quo- rum\_set.rs {\tt {\em struct} QuorumSet}} structure.
+
+The node's quorum set starts with a `parent set'. This parent set is composed of nodes and child sets, which are both called {\em members}. Each child set is in turn composed of nodes and grandchild sets, and so on. Every set has a {\em threshold} defined by the node operator, which is the number of members that set can contribute to a given quorum slice.
+
+To define an arbitrary quorum slice, take random members from the parent set until its threshold is met. If any of those members is a child set, take members from that child set until {\em its} threshold is met, and so on.
+
+When a set's threshold is close to the total number of members in the set, each of those members will participate in a relatively higher share of the quorum slices of which the set is a member, compared to if the ratio was lower. Moreover, members close to the parent set (or in the parent set) will participate in relatively more quorum slices than members farther away. Node operators can use those two variables to place well-trusted nodes in more quorum slices than less-trusted nodes.
+
+
+
+\section{Federated voting}
+\label{sec:consensus-federated-voting}
+
+Suppose nodes in the network wish to reach agreement on an arbitrary question. In the end, they could agree on multiple answers to the question, or just one answer. We call a potential answer a {\em statement}. Statements can `contradict' each other, which means they are not allowed to coexist in the final set of answers. Whether statement S is contradicted by statement S', or whether S or S' even qualify as valid answers, are rules defined by whoever wrote the question and enforced by each node individually.
+
+
+\subsection{Level 1: voting}
+\label{subsec:consensus-lv1-voting}
+
+Any node can offer a statement S to the network by issuing a level 1 declaration (a.k.a.\ a {\em vote}) for S, which it transmits to other nodes. Those nodes can then issue their own votes for S, so long as S is valid and they have not already issued a vote for a statement that contradicts S (or accepted one).
+
+There are two basic classes of statements. So-called {\em irrefutable} statements can't be contradicted by any other statement, according to whoever defined the question being answered. Once a node sees a full quorum of votes for an irrefutable statement S (including itself), then S has full agreement and can be finalized immediately. It is only a matter of time before other nodes in the network learn about S, see a full quorum, and finalize it.
+
+Naturally, the second class is statements that can be contradicted. Unfortunately it isn't enough to see a full quorum of votes for a statement S that is contradictable. What about nodes outside that quorum? Any of them could have voted for a statement contradicting S, or could do so in the future. All quorums must intersect with each other for a healthy network, so if a full quorum has voted for S then no quorum can vote for S-contradicting statement S'. Without agreement between intersecting quorums, the network is likely to have many broken nodes unable to finalize any statements.
+
+\subsection{Level 2: accepting}
+\label{subsec:consensus-lv2-accepting}
+
+Instead of finalizing a contradictable statement S voted for by a quorum, a node instead {\em accepts} that S has what it takes to be a final answer. If a node $v$ accepts S, it will issue a level 2 declaration to other nodes informing them it accepts S. A level 2 declaration also implies a level 1 declaration (vote) for the same statement.
+
+Whenever a quorum seen by $v$ has voted for S (or accepted it), then so long as all other nodes in the quorum are well-behaved, those nodes will also eventually accept S. This is because all those nodes also have a quorum of agreement on S, even if their quorums are only subsets of $v$'s quorum.\footnote{If node $v2$ sees a quorum Q2, and $v2$ is a member of $v$'s quorum slice QS, then all the nodes in Q2 will be members of quorum Q made from QS (assuming all nodes only have one quorum slice each, for simplicity).}
+
+Meanwhile, once a solid quorum of votes exists, nodes in quorums that intersect with the solid quorum will be unable to accept any statements that contradict S, because the overlapping nodes will have already voted for S. Of course, there could be quorums that don't intersect with the solid quorum, which could have their own solid vote for a contradictory statement. However, disconnected quorums should not exist in a healthy network and are the responsibility of node operators to prevent by selecting good quorum slices.
+
+When a node $x$ has accepted statement S, they are ready to finalize it but are waiting for other nodes to get on board (more on that in a bit). If a different node $v$ has only voted for statement S' (which contradicts S), but hasn't accepted it, then it is reasonable to think $v$ could be convinced to change his mind.
+
+Suppose at least one node in each of $v$'s quorum slices has accepted S, and is waiting to finalize it. Clearly there is no way $v$ will ever see a full quorum of votes for S', as all his possible quorums are blocked by at least one level 2 declaration for S. We call those nodes a {\em v-blocking set}, because they block $v$'s prior vote.\footnote{If there is a $v$-blocking set of befouled nodes (misbehaving nodes or nodes blocked/confused by misbehaving nodes), then $v$ is blocked from seeing a full quorum of agreement of honest nodes. In that case, $v$ would also be considered befouled. \cite{stellar-consensus-protocol}}\footnote{\label{footnote:v-blocking-quorum-sets}Since quorum slices are defined in terms of quorum sets (Section \ref{subsec:consensus-quorum-sets}), a $v$-blocking set exists if, in the parent set, there aren't enough\marginnote{consensus/ scp/src/quo- rum\_set.rs {\tt findBlocking- SetHelper()}} non-blocking members to meet the parent set threshold (i.e.\ there aren't enough to compose a quorum slice, hence why it's called a `threshold' --- the minimum number of members for a node to not be blocked). This requirement extends to members of the parent set. Any child set that doesn't have enough non-blocking members to meet its threshold qualifies as a blocking member of the parent set.} Since $v$'s vote for S' is hopeless, it is safe for him to abandon that vote and accept S, which has a higher chance of succeeding.\footnote{Keep in mind that nodes are agnostic about which statements get finalized. Their only goal is to remain consistent with at least one of their quorum slices, by either reaching final agreement on {\em some} valid statements, or not finalizing any statements if necessary.} More generally, whenever a node sees a $v$-blocking set for statement S and it hasn't already accepted a statement contradicting S, it will automatically accept S, and abandon any votes for contradictory statements.\footnote{One reason $v$-blocking sets are based on level 2 declarations instead of votes is a node $v2$ in a $v$-blocking set based on votes could see a $v2$-blocking set that causes it to change its vote from S to S'' after convincing $v$ to change its own vote from S' to S! The network would be unstable, and malicious nodes could trap it in cycles of vote flipping.}
+
+It's worth emphasizing that a $v$-blocking set is composed of one node from each of $v$'s quorum slices, rather than at least one node from each of $v$'s quorums.\footnote{If a single node is present in multiple quorum slices, then it can `block' all of those slices. In other words, a $v$-blocking set doesn't have to be composed of only unique nodes from each slice.} Intuitively, this is because $v$ only trusts his quorum slices, and shouldn't be willing to abandon a vote based on the claims of nodes he doesn't directly trust.\footnote{More technically, if $v$ were blocked by a node in each of his quorums, then if those blocking nodes weren't in his slices, his slices would be transitively blocked since the blocking nodes would be sourced from his slice's slices. Checking for $v$-blocking sets among local quorum slices is a safe simplification, because given enough time a $v$-blocking set based on quorums will reduce to a $v$-blocking set in the local quorum slices as those slice nodes realize they are blocked.}
+
+To reiterate, once a statement has been accepted (in a well-connected, well-behaved network), no other statement can be accepted by any node. Imagine a quorum Q that has voted for statement S, allowing a member of the quorum $v$ to accept it. For a node $n$ outside of Q to accept a statement S' that contradicts S, it either must see a full quorum voting for S', or see a $v$-blocking set accepting S'. Since a $v$-blocking set can only appear when at least one quorum has accepted S', the problem reduces to creating a quorum that votes for S'. However, a quorum has already voted for S, so since all quorums intersect, there are no full quorums available to vote for S'. Therefore S' cannot get accepted.
+
+\subsection{Level 3: confirming}
+\label{subsec:consensus-lv3-confirming}
+
+Now imagine a quorum Q whose nodes have all accepted statement S. Even though no other statement has a hope of being accepted, suppose anyway that all nodes N' outside of Q have voted for S'. Are they doomed to remain in disagreement with Q? Oddly, we claim at least one node $v$ in N' has a $v$-blocking set whose nodes are all in Q.
+
+To justify that claim, first recall that quorums are created by tracing out quorum slices, so if nodes have many slices there can be many different quorums. Imagine every node in N' has at least one quorum slice that doesn't have a node in Q. In that case, it is guaranteed there is at least one quorum Q', seen by at least one node, created by tracing some of those slices, which does not intersect with Q. However we said the network is well-connected, so Q' is not allowed, since otherwise the nodes in Q' could finalize a result different from the nodes in Q!
+
+On the other hand, if there are nodes V in N' which each have a $v$-blocking set in Q (even if V just contains one node), then so long as all the other paths that can be traced by quorum slices from nodes in N' end up hitting a node in V or Q, all quorums made by nodes in N' will intersect with~Q. Note that it isn't necessary for any of the nodes in N' - V to have quorum slices with nodes in Q if they are able to access Q by linking to a node in V.
+
+The essential consequence of this $v$-blocking set idea is once quorum Q has fully accepted statement S, there will always be nodes V (in a well-connected network) which it can persuade to also accept S. Moreover, we can extend the previous analysis to the nodes in Q + V. If there are no nodes in N' - V with a $v$-blocking set in Q + V, then there must be a least one node in N' - V that sees a quorum that doesn't intersect with Q, which is not allowed. Therefore in a well-connected and behaved network, once a quorum Q has fully accepted a statement S, all other well-connected and behaved nodes will eventually also accept S, as $v$-blocking sets gradually eat away at N' (there is a `cascade' effect).
+
+Since a full quorum Q accepting S means the entire network will eventually accept S, we have found an adequate and robust condition for finalizing statements. Once a node sees a full quorum of nodes accepting statement S (including itself), it will {\em confirm} S, and record S for permanent use. Eventually the entire network will also confirm S.
+
+It's possible for many statements to be voted on and ultimately confirmed in parallel, so long as they don't contradict each other. Likewise, it's possible the network will never get to the point of confirming any statement, if too many nodes vote for contradictory statements. The Stellar Consensus Protocol discussed in Section \ref{sec:consensus-stellar-consensus-protocol} is designed to address that problem by defining a set of rules and heuristics that enable `eventual' consensus despite any contradictions.
+
+
+\subsection{Revisiting befouled nodes}
+\label{subsec:consensus-revisiting-befouled-nodes}
+
+So far we have focused on well-connected and behaved networks. We showed that nodes in such networks only finalize statements that will also be finalized by all other well-connected and behaved nodes. At what point can misbehaving nodes prevent honest nodes from having that finalization guarantee?
+
+Clearly each misbehaving node can poison any quorum of which it is a member, preventing it from reaching agreement on any statement. In other words, there must be at least one fully well-behaved quorum for the network to finalize any statement.\footnote{If enough misbehaving/befouled nodes agree with each other, then they could form a quorum that finalizes different statements from the rest of the network. However, misbehaving nodes can do whatever they want, including finalizing any random statement at any time, so a misbehaving divergent quorum is not considered a problem any protocol can address.}
+
+Any node $v$ with a $v$-blocking set of misbehaving nodes is at risk of never seeing a full quorum of agreement on any statement. Moreover, the $v$-blocking set could convince $v$ to accept a statement S' which contradicts other statements accepted by nodes in the network, causing $v$ to appear like it is misbehaving to other nodes. As we have noted before, `befouled' nodes are those that are both inherently misbehaving, and those that have been poisoned by other befouled nodes.
+
+If a befouled node provides quorum intersection to other nodes, it can disconnect those nodes from parts of the network. It is helpful to think about network health in terms of the set of well-behaved nodes that remains when all befouled nodes have been removed (i.e.\ ignored). If that set is well-connected then there is no risk of quorums finalizing different statements. Of course, that guarantee does not exist for befouled nodes (even if they are honest), who may fail to finalize a statement finalized by the rest of the network, or even finalize a contradictory statement.\footnote{See \url{https://stellarbeat.io/} for an example of how an SCP-based network's health can be evaluated and monitored, in terms of quorum intersections, and section 6 of \cite{fast-secure-global-payments-stellar} for a discussion about how to evaluate network health efficiently.}
+
+
+
+\section{Stellar Consensus Protocol}
+\label{sec:consensus-stellar-consensus-protocol}
+
+The Stellar Consensus Protocol (SCP) is an abstract implementation of the federated Byzantine agreement (FBA) model discussed in the previous sections. The protocol is concerned with answering one high-level question, by asking a series of intermediate questions subject to federated voting (with various additional rules). The answer to that high-level question is a {\em slot}, which can be {\em externalized} for permanent use by nodes (slots are the outputs from the protocol).
+
+Rather than specify what high-level question must be answered, SCP leaves it open ended. MobileCoin's consensus protocol is a concrete implementation of SCP, where the question is ``what should go in the next block of the blockchain?". Its answer is the set of transactions that will go in that block, while the block is considered a slot.
+
+This section is mainly concerned with elucidating the Stellar Consensus Protocol. Occasional notes about MobileCoin-specific implementation details are added where appropriate.
+
+
+\subsection{Nomination}
+\label{subsec:consensus-nomination}
+
+After spending so much of Section \ref{sec:consensus-federated-voting} discussing contradictable statements, it may seem like we intend to make the statements ``Add Tx1 to Block X" and ``Add Tx2 to Block X" contradictory if Tx1 and Tx2 try to spend the same outputs (have overlapping key images). The problem with this is it allows Tx1 and Tx2 to become stuck if no complete quorum votes on just one of them, which may prevent the network from finalizing Block X (e.g. if Tx1 and Tx2 are the only transactions available). A more efficient approach, which is also observed in Nakamoto consensus, is to finalize one of them and discard the other.
+
+In the first phase\marginnote{consensus/ scp/src/ slot.rs {\tt do\_nomina-  te\_phase()}} of SCP, called {\em nomination}, nodes may nominate apparently contradictory values for the next slot. For example, it is valid for a node to vote for both of the statements ``I nominate Tx1 for Block X" and ``I nominate Tx2 for Block X".\footnote{In MobileCoin, transactions are only visible to the code executed by secure enclaves, while SCP is implemented outside of enclaves. Practically speaking, a nominated transaction is really a nominated transaction ID (a hash\marginnote{[MC-tx] src/tx.rs {\tt tx\_hash()}} of the transaction), and SCP nodes just pass those IDs around. Connecting transaction IDs with actual transactions, and validating those transactions, is implemented as supporting functionality alongside the main SCP protocol.} The network performs federated voting on these nominate statements.
+
+If nodes can vote for new nominations without limit, then the nomination stage could last indefinitely, with new statements constantly being passed through. However, the goal of SCP is to reach consensus on a set of nominations and finalize a slot before moving to the next slot. It is fine for statements that don't make it into one slot to go in the next one.
+
+To that end, once a node confirms any nomination, it will no longer vote for new nominations. In other words, confirmed statements always contradict statements that `could be voted on', preventing votes from being cast. However, $v$-blocking sets can always convince a node to accept a given nomination. This loophole is necessary because any node that has accepted a statement is likely to confirm it at some point (see a full quorum of acceptance), and we want the network to reach consensus on confirmed nominations. Ultimately, all statements that have progressed a fair distance into the nomination stage will be confirmed (typically any statement that gets a full quorum of votes), while others will get stuck and may be re-nominated in future slots. Importantly, at least one nomination will always be confirmed by the entire network.
+
+While clear that if enough time passes the network will converge on a set of confirmed nominations, it isn't possible for nodes to directly know when that happens. However, convergence can be discerned indirectly by performing iterative federated voting on nomination sets. If a quorum reaches agreement on some nomination set, then the network has converged and that set can be finalized for the SCP slot under deliberation. We go into more detail on this {\em balloting} procedure in Section \ref{subsec:consensus-balloting}, but for now must take two small detours.
+
+\subsubsection{Combining nominations}
+
+Nominations containing values that are apparently contradictory can be confirmed together. Naturally, those values can't coexist in the final slot. As such, implementers of SCP must define\marginnote{consensus/ service/src/ validators.rs {\tt combine()}}[-1cm] a method for combining nominations into a {\em composite value}. Each composite value is a candidate for the final slot value, and only one composite value can win in the end.
+
+In MobileCoin, nominated transactions are combined by sorting the nomination set then removing transactions with at least one key image or txout public key that already exists in the list (i.e.\ in a transaction with lower index).\footnote{A transaction removed from a nomination set is not immediately considered invalid by the node. It will either be re-nominated for the next block if not invalidated by the current block (i.e.\ if the final version doesn't contain a key image or txout public key in the removed transaction), or could even be finalized for the current block if a different node retains it in their own composite value and that value wins out in the balloting procedure discussed in Section~\ref{subsec:consensus-balloting}.} Transactions are sorted\marginnote{consensus/ enclave/ api/src/ lib.rs {\tt cmp()}} by fee (highest fees first), then by transaction ID in lexicographic order (`smaller' IDs first).\footnote{A transaction's ID is\marginnote{[MC-tx] src/tx.rs {\tt tx\_hash()}} a hash of all its contents.}\footnote{Combining nominated transactions is implemented outside of validator enclaves, because all of the combination rules use transaction information that is known to validator node operators. When we say `transactions' are combined, in practice it is truncated versions of the full transactions\marginnote{consensus/en- clave/api/src/ lib.rs \\ {\tt {\em struct} WellFormed- TxContext}} that are combined. The full versions are referenced by transaction IDs.} A composite value in MobileCoin is therefore a list of transactions that can be directly used to form a block.\footnote{\label{footnote:scp-tipping-point-voting}In the version of SCP that has been implemented up to the time of writing this, nodes are assumed to have a black-and-white view of statements that could be nominated. Either a statement is valid, in which case it will always be voted for by all nodes, or it is invalid and no node will vote for it. However, the nomination phase is effectively a procedure for the network to hold referenda on potential statements. This means it is possible (and safe) for nodes to express opinions about those statements. If a node thinks a statement is valid but undesirable, then they are free to not vote for it. If an undesirable statement gets approved by enough nodes, then nodes that did not vote for it will have to accept it due to $v$-blocking sets (we call this `tipping-point' voting). One trivial application of discretionary voting is implementation of an ad hoc fee policy at the network level. Only if enough nodes believe a transaction's fee is `high enough' will it gather enough votes to be accepted nominated, and eventually confirmed nominated. Another more advanced application would be referenda on system-wide parameter changes like version numbers \cite{rfc-mobilecoin-hardforks}. Note that a malicious set of nodes large enough to $v$-block at least one quorum can convince the network to confirm any valid statement, so deliberative voting is only useful if there are sufficient honest nodes.}
+
+\subsubsection{Federated leader selection for voting}
+
+In SCP, nodes do not freely vote for every nomination they see from other nodes. Instead, they select `leader' nodes and only vote for the nominations voted for by those leaders. Supposedly this reduces the total amount of data passed between nodes in the network by limiting who will cast votes and when \cite{stellar-consensus-protocol}. However, we are not aware of any research backing this up, and are not convinced it has any practical effect on total data passed between nodes compared to free voting. Free voting would seem to require relatively fewer communication rounds between nodes, lessening the data transmitted in that approach. In any case, since leader selection is actively used in MobileCoin, we will describe it here.
+
+The nomination phase of SCP is implemented as a series of `rounds'. Each node executes the same series of steps\marginnote{consensus/ scp/src/ slot.rs {\tt do\_nomina- te\_phase()}} in a given round before starting a new one (different nodes in the network don't have to be synchronized, rounds are only a `local' concept). During a round a node collects messages from other nodes which it will use in the next round. Each round, the node adds a new leader to its list of leader nodes. After adding a new leader, it checks if any messages received from any of those leader nodes contain nomination votes or level 2 declarations (acceptances) which it hasn't voted for before (or accepted). Assuming the node hasn't confirmed any nomination yet, it issues new votes for those not-voted-for nominations.
+
+A node selects leaders from among its quorum slices. Only when a node selects itself to be a leader will it issue brand new votes for statements it wants to nominate. Leaders are selected with the following algorithm.
+
+\begin{enumerate}
+    \item Node $v$ computes a {\em weight}\marginnote{consensus/ scp/src/quo- rum\_set.rs {\tt weight()}} for each node in its quorum set, based on the fraction of quorum slices it participates in. A member of the parent set participates in\vspace{.115cm}
+    \[(\frac{\textrm{\em parent\_threshold}}{\textrm{\em num\_parent\_members}})\]
+    
+    quorum slices. If that member is a child set, then its own members participate in\vspace{.115cm}
+    \[(\frac{\textrm{\em child\_threshold}}{\textrm{\em num\_child\_members}})*(\frac{\textrm{\em parent\_threshold}}{\textrm{\em num\_parent\_members}})\]
+    
+    slices, and so on.
+
+    Only the first appearance of a node in $v$'s quorum set is used to compute its fraction (even though it may be a member of multiple child sets), to reduce the algorithm's complexity. Since $v$ participates in all of its own quorums, its fraction is automatically 1.
+
+    A node's weight is its fraction times the maximum number that can be stored in a 32-byte variable (i.e.\ $2^{256} - 1$).
+    
+    \item Decide\marginnote{consensus/ scp/src/ slot.rs {\tt neighbors()}} which nodes in the quorum set are eligible to be leaders this round by computing a 32-byte hash for each node and comparing it to the node's weight. Only if the weight is higher than the hash output is the node eligible. The hash contents are: slot index (i.e.\ block index), 1 (an integer for differentiating the hash result from the priority computation in the next step), round number, node ID (a public key associated with the node).\vspace{.155cm}
+    \[hash  = \mathcal{H}_{32}(slot\_index, 1, round\_num, node\_id)\]
+    
+    Less trusted nodes will be eligible to be leaders less often than more trusted nodes (recall Section \ref{subsec:consensus-quorum-sets}), since their weights will be lower.
+
+    \item Compute\marginnote{consensus/ scp/src/ slot.rs {\tt find\_max\_ priority\_ peer()}} a {\em priority} for all the eligible nodes.\vspace{.155cm}
+    \[priority  = \mathcal{H}_{32}(slot\_index, 2, round\_num, node\_id)\]
+
+    \item Add the node with the highest priority to the list of leader nodes. If the highest priority node is already in the list, use the next highest priority node, and so on.
+\end{enumerate}
+
+If enough nomination rounds pass then all nodes in $v$'s quorum set will be considered leaders, so federated leader selection does not affect how SCP works at a fundamental level.\footnote{It might seem that federated leader selection for voting would make propagating transactions throughout the network slow and inefficient. However, transactions are transmitted between nodes  (i.e.\ node enclaves) independent of SCP, which only deals with transaction IDs. Nodes transmit transactions to each other with a simple `flood' protocol, in which newly encountered transactions are sent\marginnote{consensus/ser- vice/src/conse- nsus\_service.rs {\tt create\_scp\_ client\_value\_ sender\_fn()}} aggressively to all known nodes. Unfortunately flooding transactions allows network observers to estimate which node a given transaction was originally submitted to. A more sophisticated technique called Dandelion++ involves first sending new transactions through a line (or `stem') of nodes, before flooding (`fluffing') the transaction to the network \cite{dandelion-plus-plus}.}%move this footnote somewhere
+
+
+\subsection{Balloting}
+\label{subsec:consensus-balloting}
+
+Once a node has a composite value created by the nomination stage, it is faced with two conflicting motivations. On the one hand, it wants to find a quorum of nodes with the same composite value so the value can get accepted, confirmed, and ultimately used as a permanent output of the protocol. On the other hand, if there are no quorums available for the current composite value, it wants to keep updating that value until a quorum does appear (one should appear eventually because nomination is designed to converge). But, if nodes are allowed to continually update their composite values, then a quorum that appears at one moment could disappear in the next.
+
+The balloting procedure used to solve that dilemma contains a large number of details, including both rules and heuristics, but at its core is surprisingly simple. First we will discuss the fundamental structure of balloting, then build up those details by progressively pointing out problems and their solutions.
+
+\subsubsection{Essentials of convergence}
+
+Intuitively, the first goal of a node that has obtained a composite value from nomination is to find a quorum that also has that composite value. Finding that quorum is called {\em preparing} a value. In other words, a composite value is prepared when it has passed through a round of federated voting and become confirmed. Any number of intermediate composites may come out of nomination before a quorum agrees on one, so to prevent nodes from getting stuck, we say a vote to prepare a composite value doesn't contradict any other vote to prepare a composite value. This means numerous composites can become confirmed prepared.
+
+Once a composite is confirmed prepared, the node wants to {\em externalize} it, which means finalizing it for use as an output of the SCP slot. However, since there are many possible composite values but only one may succeed in the end, we must {\em commit} one of the confirmed prepared values by performing federated voting on them. In fact, statements of the form `commit the confirmed prepared composite value X' are voted for alongside statements `prepare the composite value Y' (the same federated voting round). However, we define two critical rules.
+\begin{enumerate}
+    \item Since only one composite can be finalized by the protocol, we define an ordering of composites. For now, imagine the ordering is based on an implementation-defined assessment of which composites are `better' than others. For example, in MobileCoin composites could be ordered by transaction fee totals, ensuring new composite values are always ordered higher than old ones. This ordering scheme is a heuristic that encourages better composites to be finalized (in our naive pre-balloting model).
+
+    \item Statements to prepare a value X contradict statements to commit a value Y if X $>$ Y.\footnote{The SCP whitepaper \cite{stellar-consensus-protocol} says that preparing a value X `aborts' all lower-ordered composites, however we believe the `contradiction' terminology is a lot easier to understand, since it directly ties into our discussion of federated voting.}
+\end{enumerate}
+
+Importantly, we know from Section \ref{subsec:consensus-lv2-accepting} that once a node has accepted a statement S, no other node in the network will accept a contradictory statement S'. In the context of balloting, once a node has accepted the statement `commit Y', no other node will ever accept `prepare X' if X $>$ Y. Therefore Y is the highest value that can become prepared and is safe to externalize once it gets confirmed committed.\footnote{We can also point out that each node will only vote to commit one composite value at a time. To vote to commit a value, the node must confirm it is prepared, which entails accepting it is prepared. Therefore, if a node has voted to commit a value, then in order to confirm it was prepared it must have dropped any lower-ordered votes to commit. Likewise, to vote to commit a higher value it must accept it is prepared, which means dropping the current vote to commit.}
+
+It may seem like what we have described is adequate to guarantee convergence. However, the network can still get stuck if some nodes have voted to commit Y but other nodes voted to prepare X, leaving no full quorums able to use $v$-blocking sets to convince nodes on either side to change their minds. This can happen when some nodes see a full quorum accepting prepare(Y), so they confirm it and cast a vote for commit(Y), but part of that quorum voted for prepare(X) before they saw that prepare(Y) can be confirmed.
+
+\subsubsection{Resolving the stuck state}
+
+Even though the network might be stuck due to conflicts between prepare and commit votes, we do know that in this stuck state there is at least one value that get confirmed prepared, and hence the network has reached a point of convergence. Since it is plausible for a confirmed prepared value to be externalize-able, we can define two additional rules.
+
+\begin{enumerate}
+    \item Instead of preparing and committing composite values directly, we define a {\em ballot}\marginnote{consensus/ scp/src/ core\_types.rs {\tt {\em struct} Ballot}} as a pair between a {\em ballot counter} and a composite value (called a ballot `value' for short). New composite values obtained from nomination start at ballot counter 1 (for now). For example, a ballot value Y with counter 1 will be denoted Y:1.
+
+    A ballot with a higher counter is always ordered higher than a ballot with lower counter, and if two ballots' counters are the same then ordering is defined by a comparison of their values. Moreover, two ballots with the same value never contradict each other, regardless of their counters.
+
+    \item Whenever a node sees any ballot Y:n that is confirmed prepared, if that ballot is the {\em highest} confirmed prepared ballot, then the node will issue a vote to prepare Y:(n + 1).
+\end{enumerate}
+
+These new rules lead to a number of observations.
+
+\begin{enumerate}
+    \item Trivially, the two new rules do not violate the old rules. To exercise our understanding, considered these events that may occur.
+    \begin{enumerate}
+        \item If you have a vote for commit(Y:1), then you will also issue a vote for prepare(Y:2), because prepare(Y:1) must be confirmed.
+
+        \item If you confirmed prepare(Y:1), but have a vote for prepare(X:1) with X $>$ Y, then you can't have voted commit(Y:1). Or perhaps you did vote commit(Y:1) but a $v$-blocking set accepting prepare(X;1) made you discard your vote commit(Y:1) and instead accept prepare(X:1) (which also qualifies as a vote for prepare(X:1)).
+
+        \item If you confirmed prepare(Y:1) and voted prepare(Y:2), then later confirmed prepare(X:1) and voted prepare(X:2), this implies prepare(Y:2) wasn't previously confirmed, because otherwise you would vote to commit(Y:2) which would contradict a vote for prepare(X:2) (setting aside the possibility of the commit vote being blocked by a prepare(N:n) with N:n $>$ Y:2).
+    \end{enumerate}
+
+    \item If commit(X:1) gets accepted by at least one node, but some nodes have voted to prepare(X:2), they won't get stuck because X:1 and X:2 don't contradict each other. If at a later point commit(X:2) gets accepted or even confirmed, it will not affect the value externalized (both ballots have value X).
+
+    \item Casting a vote to prepare(Y:2) for the highest confirmed prepared ballot Y:1, instead of all confirmed prepared ballots, is necessary in some cases because often nodes that confirmed prepare(Y:1) have also voted to commit(Y:1). Even if prepare(Z:1) was also confirmed, with Y $>$ Z, since prepare(Z:2) contradicts commit(Y:1) those nodes can't vote for it. On the other hand, it might seem superfluous to add that sub-rule (that only the highest confirmed ballot should be bumped up with a new vote), since contradictory ballots were already defined and the relevant nodes will automatically only vote to prepare(Y:2).
+
+    However, the sub-rule is more expansive because it also applies to nodes that have confirmed at least one ballot is prepared, but not voted to commit any ballots. This can happen if they voted to prepare a ballot ordered higher than any confirmed prepared ballots, preventing the nodes from voting to commit any of them.
+
+    Suppose a node has voted to prepare(X:1), and confirmed both prepare(Y:1) and prepare(Z:1), with X $>$ Y $>$ Z. Now suppose it votes to prepare(Y:2) and prepare(Z:2). We know that prepare(Y:1) already was confirmed, so if enough time passes all other nodes that confirmed it should also vote to prepare(Y:2), and then eventually confirm it (see an exception in the next observation). Since Y $>$ Z, it is unlikely that a vote to commit(Z:n) will ever appear, since votes to prepare(Y:n) will in most cases be around to contradict it. Of course, that is only in most cases --- if Z is lucky, it could win in the end. Therefore the sub-rule under scrutiny is a {\em heuristic} that simplifies the protocol.
+
+    \item If prepare(Y:1) was confirmed, then eventually all nodes in the network will also confirm it. Moreover, if enough time passes then they will also vote to prepare(Y:2). However, that is only true if they do not instead decide to vote to prepare(X:2). Importantly, if any node votes to prepare(X:2) it means prepare(X:1) has been confirmed. And, since X $>$ Y, all nodes who confirmed both prepare(X:1) and prepare(Y:1) will vote for prepare(X:2) even if they previously voted to prepare(Y:2). In other words, since X:1 is superior to Y:1, X:2 is able to overwhelm Y:2 given enough time.
+
+    \item The previous observation gives us a hint about how these rules solve our previous problem of nodes getting stuck. Recall that nodes get stuck if they vote to prepare(X:1) before confirming prepare(Y:1), but other nodes confirmed prepare(Y:1) and voted to commit(Y:1) leaving them unable to vote for prepare(X:1), preventing prepare(X:1) from gaining enough votes to get accepted.
+
+    With the new rules, eventually all nodes will vote to prepare(Y:2), thereby escaping the state of being stuck due to votes to prepare(X:1).
+
+    \item While increasing ballot counters can allow nodes to move past stuck states, it is still possible for ballot counters above 1 to get stuck in the same way. Suppose we have two ballots X:1 and Y:1 with X $>$ Y. To get to the next ballot counter, imagine prepare(Y:1) is accepted by all nodes but before any realize it is confirmed they also vote to prepare(X:1). First all the nodes realize prepare(Y:1) is confirmed and vote prepare(Y:2), and then a subset of nodes confirm prepare(X:1) and vote to prepare(X:2).
+
+    Before the remaining nodes realize they can vote to prepare(X:2), they confirm prepare(Y:2) and vote to commit(Y:2). This is the same problem we had before, except now the counter is 2. To get past it, nodes have to vote to prepare(Y:3) after all of them confirm prepare(Y:2).
+\end{enumerate}
+
+All those observations are great, and the reader may believe we have figured everything out by now. However, it is theoretically possible for the ballot counter to rise indefinitely with the stated rules, preventing the network from ever externalizing a ballot value.
+
+Let us imagine two ballot values A and B, where A $>$ B. These ballot values can `ping-pong', neither able to overcome the other.
+
+\begin{enumerate}
+    \item To start, suppose prepare(A:1) is voted for by a quorum, and then prepare(B:1) gets confirmed. The nodes that confirm prepare(B:1) will vote to prepare(B:2).
+
+    \item While prepare(B:2) is being voted for, prepare(A:1) gets confirmed. If any nodes had voted for commit(B:1), those votes will be discarded once $v$-blocking sets of nodes accepting prepare(A:1) cascade throughout the network.
+
+    \item Let there be a full quorum that votes for prepare(B:2) before realizing prepare(A:1) can be confirmed. None of those nodes may vote for commit(A:1) (although nodes outside that quorum may do so). On the other hand, they can still vote to prepare(A:2).
+
+    \item By the time prepare(B:2) gets confirmed, a full quorum has voted for prepare(A:2). As expected, prepare(B:3) gets voted for.
+
+    \item Now we see the pattern repeating. As prepare(B:3) gains votes, prepare(A:2) gets confirmed and prepare(A:3) votes appear.
+
+    \item While the pattern could go on forever, we will demonstrate how it can be broken. Let the votes for prepare(A:3) and prepare(B:3) accumulate. This time, votes for prepare(A:3) accumulate much faster than for prepare(B:3). Prepare(A:3) gets confirmed before prepare(B:3), and when the dust settles we see a full quorum voting for prepare(A:4) but no quorum for prepare(B:4) (perhaps some nodes voted prepare(B:4), but not enough for a quorum). This means prepare(A:4) is guaranteed to be confirmed, commit(A:4) will be accepted and confirmed, and A will be externalized.
+\end{enumerate}
+
+It turns out the ping-pong problem can't be completely solved due to the asynchronous nature of SCP. Instead, we rely on heuristics to prevent it from impacting any real-world implementation of SCP.\footnote{The reader may be disappointed to see we encountered an unsolvable problem after all the effort invested so far. However, it is a lot better to have a problem that can be addressed with heuristics than a problem with absolutely no solution like the network being at risk of getting stuck.}
+
+\subsubsection{Synchronization heuristics}
+
+Fundamentally, ping-pong occurs when nodes issue votes for ballots with high counters even though the network is still working on lower-numbered ballots. The basic solution is for nodes to wait a while before issuing votes for ballots with higher counters. We define the following heuristics.
+
+\begin{enumerate}
+    \item If\marginnote{consensus/ scp/src/ slot.rs {\tt maybe\_set\_ ballot\_ timer()}}[-1.15cm] the highest ballot that a node has voted to prepare has counter N, then if the node sees a quorum whose highest ballots voted to prepare have counters $\geq$ N, the node will start a timer.
+
+    \item At the end of that timer, the node may issue a vote\marginnote{{\tt process\_ timeouts()}} to prepare a ballot with counter N + 1, but not before (there is an exception, which we will point out later).
+
+    \item The timer duration rises as a function of N.
+\end{enumerate}
+
+It is impossible for nodes to know if the network is stuck at any given ballot counter N, but also impossible to know if the network is ping-ponging. Relying on a steadily-increasing timer means if the network gets stuck it will always `try again' on a higher ballot counter, while if the network is ping-ponging then it will approach a timer delay where ping-pong can be resolved automatically (since the appropriate delay is unknown a priori).\footnote{If there are enough malicious nodes to block all quorums, those nodes could force ping-pong to persist indefinitely by timing their messages carefully. This is referred to as `preemption' in the SCP paper \cite{stellar-consensus-protocol}. Since a blocking set of malicious nodes has many ways to mess with a network using SCP (most of which we leave to the reader's imagination), we do not believe preemption represents an especially outstanding threat.} Moreover, always waiting for a full quorum before starting the timer helps keep nodes in line with each other, working on the same ballots at the same time.
+
+\subsubsection{Miscellaneous optimizations}
+
+At this point we have covered the conceptual foundation of SCP balloting. In addition to the prior rules and heuristics, a litany of non-essential optimizations were defined in \cite{stellar-consensus-protocol} and \cite{scp-ietf-draft}.
+
+\begin{enumerate}
+    \item Once a node has confirmed a ballot is prepared (but not necessarily voted to commit it), it will no longer actively participate in nomination. In other words, the node will stop voting for, accepting, and confirming nomination statements, and won't update its nomination-derived composite value again.
+
+    This is an optimization because it reduces the amount of composite values that can compete with each other during balloting. By itself, it is a trivially safe rule, because after a ballot is confirmed prepared the network always has a path to externalizing something.
+
+    \item So far we have required that `better' composite values be ordered higher than `worse' composite values according to implementation-defined criteria. Perhaps it is more efficient not to have so strict a requirement for implementers of SCP. Frankly it is not clear if the following rule is an optimization or just a complication.
+
+    After the ballot timer expires, nodes {\em always} issue a vote to prepare a ballot with a higher counter. Nodes effectively store a `global' ballot counter, which increments at the end of each timer period. The value for the new ballot gets selected\marginnote{consensus/ scp/src/ slot.rs {\tt get\_next\_ ballot\_ values()}} according to the following priority list (highest priority first).
+    \begin{enumerate}
+        \item the highest confirmed prepared ballot's value
+        \item the current composite value from nomination
+        \item the highest accepted prepared ballot's value
+        \item the highest voted prepared ballot's value
+    \end{enumerate}
+
+    This `optimization' complicates our conceptual model because instead of all ballots with counters $> 1$ representing ballot values confirmed prepared at the next lower counter, now the ballot stack can be polluted with apparently random ballots. It does, however, permit composite value ordering to be arbitrary, as ballots with new values obtained from nomination will always be ordered higher than old ballots (on a per-node basis).
+
+    \item Since in general the network moves to new ballot counters when lower counters are possibly stuck or not working, it is useful to define a catch-up mechanism for nodes who are at ballot counters lower than the network.% More accurately, given the prior optimization/complication it is now useful to define a catch-up mechanism.
+
+    If a node sees a $v$-blocking set with higher global counter values, then the node will update its local counter to the lowest value such that it is no longer blocked, and issue a new vote to prepare a ballot using that counter (with the value selected based on the prior optimization's priority list).
+
+    \item To reduce the size of messages sent between nodes, a declaration to vote for or accept the preparation of a ballot is also a declaration to do so for all ballots with the same value and lower counters.
+
+    \item If a node sees a ballot it can vote to commit, it may be able to vote to commit a range of ballots, since when a ballot is accepted prepared all lower ballots with the same value are also accepted prepared. We will be discarding votes to prepare ballots in the next optimization, so there is a risk of casting a vote to commit that is contradicted by a discarded vote to prepare a higher ballot with different value. As such, when issuing a new range of votes to commit a ballot, the bottom of that range must be $\geq$ the highest vote to prepare a ballot that has been cast up to that point in time.
+
+    If votes were not discarded then we could loosen that constraint by issuing all possible votes to commit that aren't contradicted by prior actual prepare-ballot votes or acceptances.
+
+    \item So far we have assumed nodes keep track of all ballots they have voted for, accepted, or confirmed (either to prepare or commit). We have also assumed each node has a complete picture of all that information for each other node (excluding votes to commit a ballot that are discarded due to $v$-blocking sets preparing a higher ballot with different value, or votes to prepare a ballot discarded due to $v$-blocking sets committing a higher ballot).
+
+    Unfortunately, processing all that information over and over again entails a computational burden on nodes. Likewise, transmitting each node's full state (ballots voted for, accepted, and confirmed both to prepare and commit) to all other nodes each time it gets updated entails a high bandwidth cost that grows as the network gains nodes. It is beneficial, therefore, to minimize the amount of information necessary to execute SCP securely. However, discarding information runs the serious risk of introducing failure points if it allows the network to reach a state where nodes have forgotten too much and can't make progress.
+
+    Surprisingly, it is only necessary for nodes to keep track of up to four pieces of information. Nodes store, and transmit to each other, the following.
+    \begin{enumerate}
+        \item \textbf{B}: The highest vote to prepare a ballot.
+
+        \item \textbf{P}: The highest ballot accepted prepared.
+
+        \item \textbf{PP}: The second-highest ballot accepted prepared (with a different value than \textbf{P}).
+
+        \item {[\textbf{C}, \textbf{H}]}: If the node has voted to commit a ballot, then \textbf{H} is the highest ballot voted to commit and \textbf{C} is the lowest ballot voted to commit (i.e.\ they represent a range of ballots with the same value).
+        
+        If the node does not have a vote to commit (either it has not yet voted to commit, or all prior commit votes were discarded), then \textbf{H} is the highest ballot confirmed prepared and \textbf{C} is a {\tt null} ballot. Note that if \textbf{H} is not a vote to commit then it is ignored by other nodes and only has significance to the local node.
+
+        If the node has accepted a ballot committed, then [\textbf{C}, \textbf{H}] is the range of ballots accepted committed. Similarly, if the node has confirmed a ballot committed, then [\textbf{C}, \textbf{H}] is the range of ballots confirmed committed.
+    \end{enumerate}
+
+    There are a few preliminary observations we can make.
+    \begin{enumerate}
+        \item When \textbf{C} is first set, it must be $\geq$ \textbf{B} according to the prior optimization. It is also easy to see that once set \textbf{C} must be set to {\tt null} before it can change to a different ballot (with different value or counter), because it only needs to change when contradicted by a higher ballot accepted prepared with different value.
+
+        \item If \textbf{C} is set, meaning there is a vote to commit a ballot, then \textbf{P} will have the same value and \textbf{PP} will be less than \textbf{C}. This is because a vote to commit only appears when a ballot is confirmed prepared and there are no contradictory higher ballots that have been accepted prepared (or voted to prepare). \textbf{PP} exists so it is possible to know the lowest ballot counter \textbf{C} may have.
+
+        \item There is an important detail to emphasize. After a node confirms a ballot is prepared and sets \textbf{H}, each time \textbf{B} is updated it will contain the same value as \textbf{H}. This aligns with the original rules we introduced for resolving stuck states.
+    \end{enumerate}
+
+    We now briefly argue that the network cannot get stuck due to nodes forgetting too much information.
+
+    The network could plausibly get stuck if most of the network has stopped updating their nomination-phase composite value, but the available information contained in nodes' messages prevents progress. Nodes end nomination when they have confirmed a ballot is prepared. There are two cases to consider.
+    
+    First, a node may confirm a ballot is prepared but later on there are no longer any quorums that accept the ballot is prepared. Nodes drop their accepted prepared ballots when they accept a higher ballot prepared. Therefore if a confirmed prepared ballot is lost, there must be a higher ballot the network is working on.
+
+    Second, suppose all nodes in the network except one quorum have stopped making progress because they confirmed a ballot prepared that was dropped. Is it possible for this final quorum to reach a state where it can't make progress, dooming the entire network to stagnation?\footnote{If the `final quorum' has misbehaving nodes then it is plausible for the network to get stuck. In that case it is the responsibility of node operators to re-configure their quorum slices to remove bad nodes so the network can get unstuck.}
+    
+    For this quorum to get stuck, part of it must end the nomination phase. Otherwise, the quorum could keep approaching convergence via nomination composites. Therefore we can assume some nodes will confirm a ballot prepared. There are two scenarios.
+    \begin{enumerate}
+        \item The nodes could confirm a ballot prepared in conjunction with nodes outside the quorum under scrutiny. This would allow those nodes to get unstuck, unwinding the problem to a network state where more than one full quorum is not stuck.% The nodes can't use old dropped values from the stuck nodes to reach confirm-prepare state because the unstuck nodes are working on higher ballots.
+
+        \item The nodes could confirm a ballot prepared within the quorum under scrutiny. For the quorum to get stuck, only some nodes can confirm the ballot prepared. Therefore the remaining nodes must drop their statements accepting the ballot prepared by accepting other higher ballots prepared.
+        \begin{enumerate}
+            \item If they accept higher ballots prepared based on the cooperation of outside nodes, this implies those outside nodes will get unstuck, allowing the network to progress.
+
+            \item If they are able to accept higher ballots prepared based on votes cast by the quorum under scrutiny, then those votes {\em must also} be accompanied by statements accepting the ballot that was confirmed prepared by some nodes in the quorum. By the time the new higher ballot gets accepted prepared by a node, it will confirm the other ballot is prepared! Moreover, once a ballot is confirmed prepared new votes to prepare a ballot always have the same value as the confirmed prepared ballot. Therefore a full quorum will issue votes to prepare the ballot confirmed prepared at a higher ballot counter, and the final quorum won't get stuck.
+        \end{enumerate}
+    \end{enumerate}
+
+    \item We saved the most dubious optimization for last. Given all the rules discussed so far, it is feasible for a node to accept a ballot is prepared that is higher than the ballot you wish to vote to prepare. There are two nuances here.
+    \begin{enumerate}
+        \item New votes to prepare a ballot \textbf{B} always have a higher counter than old votes to prepare a ballot \textbf{B}. This means if a ballot is accepted prepared based on a quorum of votes to prepare it, then any future votes to prepare a ballot will be higher than the ballot accepted prepared. Therefore a ballot accepted prepared will only be higher than \textbf{B} if it was accepted due to a $v$-blocking set.
+
+        \item Since ballots `catch up' to other nodes whenever there is a $v$-blocking set at a higher ballot counter, any ballot accepted prepared will only be higher than \textbf{B} if its value is ordered higher than \textbf{B}'s value.
+    \end{enumerate}
+
+    Apparently it is considered more efficient for \textbf{B} to always be higher than any ballots accepted prepared, because SCP includes a `clamp' on \textbf{P} and \textbf{PP}. When putting together an SCP message\marginnote{consensus/ scp/src/ slot.rs {\tt out\_msg()}} to send to other nodes, a node will reduce the counters of \textbf{P} and \textbf{PP} so that \textbf{B} $\geq$ \textbf{P} $>$ \textbf{PP}. This effectively means the node will `decline to notify' other nodes when it has accepted ballots prepared that are higher than \textbf{B}. Whether doing so is actually an efficiency gain or just meaningless is not at all clear.
+\end{enumerate}
+
+\subsubsection{Balloting procedure outline}
+
+SCP contains a large number of rules, heuristics, and optimizations. Translating those into an implementation is not necessarily a trivial task. As such, the original paper \cite{stellar-consensus-protocol} outlined an algorithm for balloting, which was elaborated on in an IETF draft \cite{scp-ietf-draft} that discussed how it should be implemented. To close out this section we will reproduce the algorithm outline, with minor changes introduced by the IETF draft. For more specific implementation details the reader should consult the cited materials and MobileCoin's source code \cite{mobilecoin-source-code} (or the Stellar network's source code~\cite{stellar-network-source-code}).\footnote{The only large topic not covered in this chapter is quorum slice reconfiguration that occurs while a slot is being consensuated, since MobileCoin does not currently support it. Readers may consult \cite{stellar-consensus-protocol} for a treatment of that subject. To summarize, active reconfiguration is only safe if quorum intersections are preserved in all permutations of quorum sets reported by nodes (assuming all befouled nodes are removed first). In other words, only if no combination of historical quorum sets from the network can be used to make quorums that don't intersect, is reconfiguration permissible. Lack of support for active reconfiguration may reduce nodes' ability to recover if they are befouled by unresponsive nodes or nodes sending illegal/dishonest messages. However, in practice it may be difficult to implement reconfiguration safely or efficiently due to the complexity of correctness. In MobileCoin node operators must restart their nodes with a new quorum set to reconfigure.}
+
+To organize the algorithm's content, four phases are defined: {\tt NOMINATE}, {\tt PREPARE}, {\tt COMMIT}, and {\tt EXTERNALIZE}. These phases are implemented as `rounds', i.e.\ functions containing sequences of steps to take. {\tt NOMINATE} and {\tt PREPARE} may take place concurrently, although {\tt NOMINATE} never lasts longer than {\tt PREPARE} (it ends once a ballot has been confirmed prepared, as we have discussed).
+
+First is the {\tt PREPARE}\marginnote{consensus/ scp/src/ slot.rs {\tt do\_prepare\_ phase()}}[-1cm] phase. The {\tt NOMINATE} phase was discussed in Section \ref{subsec:consensus-nomination}. Note that the {\tt PREPARE} and {\tt COMMIT} phase rounds can be executed ad hoc (usually when receiving fresh messages from other nodes), and are not directly tied to ballot timers. Ballot timers only determine \marginnote{{\tt process\_ti- meouts()}}when the node should increment \textbf{B}'s counter.
+
+\begin{enumerate}
+    \item Use the most recent messages from nodes in the network to see all the ballots that can be accepted prepared. If it is possible to increase \textbf{P}, do so. If \textbf{PP} can change, then change it (even if it decreases). If either \textbf{P} or \textbf{PP} contradict \textbf{C}, then set \textbf{C} to {\tt null}.
+
+    \item Use network messages to see if any ballots can be confirmed prepared. If the highest such ballot is greater than \textbf{H}, then update \textbf{H}. The first time \textbf{H} is set, disable the {\tt NOMINATE} phase.
+
+    \item If \textbf{C} is {\tt null} and \textbf{H} is both higher than \textbf{B} and not contradicted by \textbf{P} or \textbf{PP}, then set \textbf{C} as low as possible. Doing so effectively means casting a vote to commit the range [\textbf{C}, \textbf{H}].
+
+    \item If the node can accept any ballot is committed, then set [\textbf{C}, \textbf{H}] to the lowest range of ballots that can be accepted committed. Set the value of \textbf{B} to match the ballot accepted committed. Also make sure \textbf{B}'s counter is $\geq$ \textbf{H}'s counter. If \textbf{B}'s value changed, then \textbf{B}'s counter should be higher than the prior \textbf{B}'s counter. Finally, set the phase to {\tt COMMIT} and end the current {\tt PREPARE} phase round.
+
+    \item Otherwise if \textbf{H} has been set (a ballot was at one point confirmed prepared), make sure \textbf{B}'s value matches \textbf{H}'s value, and \textbf{B}'s counter is $\geq$ \textbf{H}'s counter. If \textbf{B}'s value changes due to this step, then its new counter should be greater than its old counter.
+
+    Note that in this and the previous steps \textbf{B}'s counter can be incremented due to a change in value regardless of the ballot timer, a deviation from the heuristic we earlier defined. Furthermore, this step implements an important idea we discussed earlier. Namely, voting to prepare the highest confirmed prepared ballot.
+
+    \item If there is at least one $v$-blocking set reporting \textbf{B}s with higher counters than the local node's \textbf{B}, then update \textbf{B}'s counter to the lowest number such that the node is no longer blocked. Either turn off the timer or reset it if appropriate (i.e.\ if there is a quorum at the new ballot counter), then redo the {\tt PREPARE} phase round immediately to refresh the node's state.
+\end{enumerate}
+
+Next is the {\tt COMMIT}\marginnote{consensus/ scp/src/ slot.rs {\tt do\_commit\_ phase()}} phase, which occurs after a ballot is accepted committed. In this phase the values of \textbf{B}, \textbf{C}, and \textbf{H} do not change, and [\textbf{C}, \textbf{H}] represents the range of ballots accepted committed. \textbf{P} should be the highest ballot accepted prepared with the same value as \textbf{H}, and \textbf{PP} should be set to {\tt null}.
+
+\begin{enumerate}
+    \item Using the latest messages from the network, update \textbf{P}'s counter if higher ballots with the same value are accepted prepared.
+
+    \item Use the latest messages from the network to update the counters in [\textbf{C}, \textbf{H}].
+
+    \item If a range of ballots with the same value as \textbf{H} can be confirmed committed, set [\textbf{C}, \textbf{H}] to that range of ballots, set the phase to {\tt EXTERNALIZE}, and exit the current {\tt COMMIT} phase round.
+
+    \item Otherwise update \textbf{B}'s counter so it is $\geq$ \textbf{H}'s counter.
+
+    \item If there is at least one $v$-blocking set reporting \textbf{B}s with higher counters than the local node's \textbf{B}, then update \textbf{B}'s counter to the lowest number such that the node is no longer blocked. Redo the {\tt COMMIT} phase round immediately to refresh the node's state.
+\end{enumerate}
+
+Last is the {\tt EXTERNALIZE}\marginnote{consensus/ scp/src/ slot.rs {\tt do\_externa- lize\_ph- ase()}} phase. Once a ballot has been externalized, it can be used as the final output of the current slot. Note that ballot timers are not set during the {\tt EXTERNALIZE} phase.
+
+\begin{enumerate}
+    \item Using the most recent messages from the network, see what ballots can be confirmed committed. Increase \textbf{H}'s counter if possible. Doing so presumably keeps the node in alignment with the rest of the network if other nodes are still working on the slot.
+\end{enumerate}
+
+
+
+\section{Synchronizing nodes}
+\label{sec:consensus-synchronizing-nodes}
+
+So far we have discussed a network consensuating statements as if all nodes are more-or-less on the same page. Perhaps some nodes are still finalizing one slot when other nodes are working on the next one, but overall the nodes are collaborating actively. However, what if one node disconnects from the network for a period of time, and when it comes back some nodes are several slots ahead of it? Or, what if a node is actively making slots but discovers part of the network is externalizing contradictory slots (nodes in that part of the network have diverged from you)?
+
+
+\subsection{Catching up to the network}
+\label{subsec:consensus-catching-up}
+
+If a node is behind the network, naturally it will want to catch up. How can a node know when the network is actually ahead, as opposed to only some nodes claiming the network is ahead? As part of their normal\marginnote{consensus/ service/src/ byzantine\_ ledger/ worker.rs {\tt tick()}}[-1cm] operation, SCP nodes can use the following procedure to check if they are behind the network (on a lower slot index), and then catch up if necessary.
+
+\begin{enumerate}
+    \item Node $v$ checks if it is behind\marginnote{ledger/sync/ src/network\_ state/scp\_ network\_ state.rs {\tt is\_behind()}} the network by identifying all other nodes working on a higher slot. If those nodes contain a $v$-blocking set, and (in combination with $v$) can form a full quorum, then the node probably needs to catch up.
+
+    \item Using\marginnote{ledger/sync/ src/ledger\_ sync/ledger\_ sync\_serv- ice.rs {\tt attempt\_le- dger\_sync()}} those higher-slot nodes, find the highest slot agreed on by a $v$-blocking set (i.e.\ externalized by that set), and also by a full quorum. The $v$-blocking set convinces $v$ to accept the slot, while the quorum convinces $v$ to confirm it (confirmation requires a quorum of acceptance that includes yourself).
+
+    Finding the highest slot with a blocking set and quorum is an efficiency technique that assumes if multiple nodes externalize the same slot, all the lower slots they externalized must be the same. In other words, we assume there will also be a blocking set and quorum for all slots below the new highest slot. In MobileCoin, where slot contents (blocks) depend on previous slots (each block ID is a function of all earlier block IDs), this is an easy assumption to make.
+
+    \item Request\marginnote{ledger/sync/ src/ledger\_ sync/ledger\_ sync\_serv- ice.rs {\tt identify\_ safe\_ blocks()}} all slots up to the new highest slot from the nodes that are ahead. Externalize each slot if it appears valid. For MobileCoin this means checking that each block's parent ID connects to the previous (all the way back to our local blockchain), that no key image duplicates appear, and that block root elements are as expected (reflecting the output set that existed after the previous block was published).\footnote{In ledger synchronization, MobileCoin does not currently validate blocks' root elements.}\footnote{Recall that in MobileCoin each node signs blocks it participates in validating (Section \ref{sec:blockchain-structure}). Any block a node {\em doesn't} validate is not signed, which includes any blocks obtained when catching up to the network or resolving a fork.}
+\end{enumerate}
+
+
+\subsection{Healing divergences}
+\label{subsec:consensus-healing-divergences}
+
+Nodes only finalize statements in SCP when they are confident the network will also finalize those statements. This confidence is founded in three rules set by the federated Byzantine agreement model.
+
+\begin{enumerate}
+    \item First, a node's basic goal is to reach agreement on statements with one of its quorum slices. As discussed early in this chapter, a quorum slice is a group of nodes in the network that the node trusts are well-behaved, and which the node would be satisfied to be in agreement with.
+
+    \item Second, all nodes seek agreement with their own quorum slices, so it is natural that agreement can only reliably appear when a full quorum of nodes reaches agreement.
+
+    \item Third, if nodes only finalized statements based on the first quorum of agreement they see, then the network would be unstable as nodes on the periphery of different quorums constantly get stuck. Instead, nodes are only willing to finalize statements when the rest of the network is also destined to finalize the same statements (via cascading $v$-blocking sets).%\footnote{Much like the second rule, the third rule is a defensive rule that only provides benefits when all nodes adopt it. In other words, a selfish node could choose not to adopt those rules, and instead finalize statements agreed on by just its quorum slices. After all, those are the only nodes it really trusts or cares about. However, such selfish nodes are just as likely to get stuck, on the outside of other selfish nodes' quorum slices. This is an interesting example of a purely voluntary solution to an apparent `externality' problem. Nodes' commitment to the overall success of the system overrides their more local motivations.}
+\end{enumerate}
+
+However, those three rules leave no room for the question: what about network divergence that does occur? In other words, when a node externalizes some slots, they are externalized because the node is {\em confident} the network will also externalize them, and confident no nodes will externalize contradictory slots (e.g.\ fork a blockchain by adding different blocks at the same block height).
+
+Nodes on opposite sides of an SCP network divergence have no automatic way to identify which side is `canonical'. Each node is fully confident in the results it finalizes. The only way to resolve the problem is manual intervention by node operators.
+
+Network divergence can only happen when non-intersecting quorums externalize different slots. This is the result of either quorum slice misconfiguration, or misbehaving nodes breaking nominal quorum intersections. Therefore node operators must decide if their quorum slices need to be improved. They must also decide if they are on the side of the network destined to survive the healing process. If not, they must discard unwanted slots and replace them with slots from the divergent network.\footnote{In Nakamoto-based blockchains, network forks are resolved automatically by each node selecting the chain fork with the highest cumulative difficulty (a variable related to the proof-of-work model).}
+
+In the case of MobileCoin, node operators can resolve unwanted forks by reconfiguring their quorum slices, rolling back their local copy of the blockchain to the block that appeared right before the fork (if their local copy needs to be discarded), and allowing the node software to resynchronize (Section \ref{subsec:consensus-catching-up}) with the network using the reconfigured quorum slices.
+
+

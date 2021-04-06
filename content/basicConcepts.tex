@@ -434,7 +434,7 @@ Twisted Edwards curves have order expressible as \(N=2^c l\), where \(l\) is a p
 
 As mentioned in Section \ref{subsec:group-theory}, only points in the large prime-order subgroup of a given elliptic curve are used in cryptographic algorithms. It is therefore sometimes important to make sure a given curve point belongs to that subgroup \cite{decaf}.
 
-For example, it is possible to add a point from the subgroup of size $h$ (the cofactor) to a point $P$, and, with a scalar $n$ that is a multiple of $h$, create several points which when multiplied by $n$ have the same resultant point. This is because an EC point multiplied by its subgroup's order is `zero'.\footnote{Cryptocurrencies that inherited the CryptoNote code base had an infamous vulnerability related to adding cofactor-subgroup points to normal-subgroup points. It was solved by checking that key images (discussed in Chapter \ref{chapter:advanced-schnorr}) are in the correct subgroup with the test $l \tilde{K} \stackrel{?}{=} 0$ \cite{key-image-bug}.}
+For example, it is possible to have multiple curve points that, when multiplied by the same scalar $n$, create the same resultant point. This can occur when $n$ is a multiple of $h$ and the points are created as sums between a prime-order point and different cofactor-order points. Multiplying by $n$ causes the cofactor-order component to `disappear'.\footnote{Cryptocurrencies that inherited the CryptoNote code base had an infamous vulnerability related to adding cofactor-subgroup points to normal-subgroup points. It was solved by checking that key images (discussed in Chapter \ref{chapter:advanced-schnorr}) are in the correct subgroup with the test $l \tilde{K} \stackrel{?}{=} 0$ \cite{key-image-bug}.}
 
 To be clear, given some point $K$ in the subgroup of order $l$, any point $K^h$ with order $h$, and an integer $n$ divisible by $h$:
 \begin{align*}
@@ -442,13 +442,13 @@ To be clear, given some point $K$ in the subgroup of order $l$, any point $K^h$ 
                 &= n K + 0
 \end{align*}
 
-The importance of using prime-order-subgroup points was the motivation behind Ristretto, which is an encoding abstraction for twisted Edwards-based curves that efficiently constructs a prime-order group out of the underlying non-prime group. \cite{ristretto-motivation}
+The importance of using prime-order-subgroup points was the motivation behind Ristretto, which is an encoding abstraction that can be applied to some elliptic curves (e.g.\ Ed25519). Ristretto efficiently constructs a prime-order group out of an underlying non-prime group. \cite{ristretto-motivation}
 
 
 \subsection{Ristretto}
 \label{subsec:ristretto}
 
-Ristretto can be thought of as a `binning' procedure for twisted Edwards curve points. The number of bins is equal to the prime-order subgroup of the relevant curve ($l$), and each bin has $h$ elements.\footnote{In group theory, what we call bins are more correctly known as `cosets' \cite{coset-wikibooks}.} Curve operations `on' or `between' bins behave just like curve operations on the prime-order subgroup, except in this model rather than a specific point the result is a specific bin.
+Ristretto can be thought of as a `binning' procedure for points in the underlying curve. The number of bins is equal to the prime-order subgroup of the relevant curve ($l$), and each bin has $h$ elements.\footnote{In group theory, what we call bins are more correctly known as `cosets' \cite{coset-wikibooks}.} Curve operations `on' or `between' bins behave just like curve operations on the prime-order subgroup, except in this model rather than a specific point the result is a specific bin.
 
 This implies the members of a bin must be variants of a prime-order subgroup point (in other words, a prime-order point plus all the members of the cofactor-order subgroup, including the point-at-infinity). Given two bins, adding any of their members together will land you in the same third bin. In this way curve operations on `Ristretto points', which are simple containers that can hold a bin member from any bin, behave just like operations on prime-order subgroup points.
 
@@ -467,9 +467,9 @@ Here $P^{prime}_3$ defines which bin you landed in, and $P^{cofactor}_3$ corresp
 
 Two members of the same bin are considered `equal'. There is a relatively cheap way to test equality, which we describe in Section \ref{subsec:point-compression-section}.\\
 
-The important innovation of Ristretto is each bin has a representative `canonical member' that can be easily found by `compressing' any of the bin members and then `decompressing' the result. This way curve points can be communicated in compressed form, and recipients can be assured they are handling effectively prime-order points and don't have to be concerned about cofactor-related problems.
+In each bin the point from the prime-order subgroup is the bin's `representative canonical member'. Moreover, that point can be easily found by `compressing' any of the bin members and then `decompressing' the result. This way curve points can be communicated in compressed form, and recipients can be assured they are handling effectively prime-order points and don't have to be concerned about cofactor-related problems.
 
-As a bit of callback, given some point $K$ in the prime-order subgroup and two points $K^h_a, K^h_b$ in the cofactor-order subgroup, both $K + K^h_a$ and $K + K^h_b$ will compress and then decompress into the same point $K + K^h_c$ (where $c$ may equal $a$ or $b$, or be a different cofactor point).\\
+As a bit of callback, given some point $K$ in the prime-order subgroup and two points $K^h_a, K^h_b$ in the cofactor-order subgroup, both $K + K^h_a$ and $K + K^h_b$ will compress and then decompress into the same point $K$.\\
 
 Since all bin members get compressed to the same bit string, there is no `gotcha' (as there is with standard Ed25519) where presenting different compressed members of a bin to a byte-aware context (e.g.\ a hash function or byte-wise comparison) will have different results.
 
@@ -503,13 +503,13 @@ Assume we want to compress a point \((x, y)\). First we transform it into {\em e
 \begin{description}
     \item [Square Root: {\tt Sqrt(u, v)}] \hfill
         \begin{enumerate}
-            \item Create\marginnote{[dalek25519] src/field.rs {\tt Field- Element:: sqrt\_ra- tio\_i()}} an algorithm for computing $\sqrt{u/v} \pmod q$.\footnote{These algorithms are merely shown for a sense of completeness. It's best to consult the {\tt dalek} library's implementation and notes \cite{ristretto} for any production-level applications.}
+            \item Create\marginnote{[dalek25519] src/field.rs {\tt Field- Element:: sqrt\_ra- tio\_i()}} an algorithm for computing $\sqrt{u/v} \pmod q$.\footnote{These algorithms are merely shown for a sense of completeness. It's best to consult the {\tt dalek} library's implementation \cite{dalek-curve25519-lib}, the Ristretto Group's notes \cite{ristretto}, and the Ristretto/Decaf IETF draft \cite{ristretto-decaf-ietf} for any production-level applications.}
             \item Compute\footnote{Since $q = 2^{255}-19 \equiv 5 \pmod{8}$, $(q-5)/8$ and $(q-1)/4$ are straightforward integers.} \(z = u v^3 (u v^7)^{(q-5)/8} \pmod q\).
             \begin{enumerate}
                 \item If \(v z^2 \stackrel{?}{=} u \pmod q\), set \(r = z\).
                 \item If \(v z^2 \stackrel{?}{=} -u \pmod q\), calculate \(r = z*2^{(q-1)/4} \pmod q\).
             \end{enumerate}
-            \item If the least significant bit of $r$ is 1 (i.e.\ it is odd), return $-r$, otherwise return $r$.\footnote{\label{footnote:point-comp-positive-convention-normal-decompression}According to the comments in {\tt [dalek] src/field.rs FieldElement::sqrt\_ratio\_i()}, only the `positive' square root should be returned, which is defined by convention in \cite{Bernstein2012-high-speed-high-security-ed25519} as field elements with the least significant bit not set (i.e.\ `even' field elements). In normal Ed25519 point decompression \cite{Bernstein2012-high-speed-high-security-ed25519} we would compute {\tt Sqrt}$(y^2 - 1, d y^2 + 1)$, then decide whether to use the `positive'/`negative' result variant depending on if we want the even/odd $x$ coordinate. Basically, a compressed point is the $y$ coordinate, with the most significant bit equal to 0 or 1 to indicate if the point's $x$ coordinate is even/odd.}
+            \item If the least significant bit of $r$ is 1 (i.e.\ it is odd), return $-r$, otherwise return $r$.\footnote{\label{footnote:point-comp-positive-convention-normal-decompression}According to the comments in {\tt [dalek] src/field.rs FieldElement::sqrt\_ratio\_i()}, only the `positive' square root should be returned, which is defined by convention in \cite{Bernstein2012-high-speed-high-security-ed25519} and \cite{ristretto-decaf-ietf} as field elements with the least significant bit not set (i.e.\ `even' field elements). In normal Ed25519 point decompression \cite{Bernstein2012-high-speed-high-security-ed25519} we would compute {\tt Sqrt}$(y^2 - 1, d y^2 + 1)$, then decide whether to use the `positive'/`negative' result variant depending on if we want the even/odd $x$ coordinate. Basically, a compressed point is the $y$ coordinate, with the most significant bit equal to 0 or 1 to indicate if the point's $x$ coordinate is even/odd.}
         \end{enumerate}
 
 	\item[Encoding] \hfill

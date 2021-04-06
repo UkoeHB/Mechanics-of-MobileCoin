@@ -15,7 +15,7 @@ It is often useful to prove the same private key was used to construct public ke
 \subsection*{Non-interactive proof}
 
 Suppose we have a private key $k$, and $d$ base keys $\mathcal{J} = \{J_1,...,J_d\}$. The corresponding public keys are $\mathcal{K} = \{K_1,...,K_d\}$. We make a Schnorr-like proof (recall Section \ref{sec:schnorr-fiat-shamir}) across all bases.\footnote{We could turn this proof into a signature by including a message $\mathfrak{m}$ in the challenge hash. The terminology proof/signature is loosely interchangeable in this context.} Assume the existence of a hash function \(\mathcal{H}_n\) 
-mapping to integers from 0 to $l-1$.\footnote{MobileCoin uses the {\tt dalek} library's hash-to-scalar\marginnote{[dalek25519] src/scalar.rs {\tt from\_hash<D>()}} function $\mathcal{H}_n(x) = \textrm{\tt from\_hash<Blake2b>}(x)$. The input $x$ is hashed by the BLAKE2b hashing algorithm \cite{blake2-paper} into a 64-byte bit string, which is passed to {\tt from\_bytes\_mod\_ order\_wide()} and reduced modulo $l$. The final result is in the range 0 to $l-1$ (although it should really be 1 to $l-1$).}
+mapping to integers from 0 to $l-1$.\footnote{MobileCoin uses the {\tt dalek} library's hash-to-scalar\marginnote{[dalek25519] src/scalar.rs {\tt from\_hash<D>()}} function $\mathcal{H}_n(x) = \textrm{\tt from\_hash<Blake2b>}(x)$. The input $x$ is hashed by the BLAKE2b hashing algorithm \cite{blake2-paper} into a 64-byte bit string, which is passed to {\tt from\_bytes\_mod\_ order\_wide()} where it is reduced modulo $l$. The final result is in the range 0 to $l-1$ (although it should really be 1 to $l-1$).}
 
 \begin{enumerate}
 	\item Generate random number $\alpha \in_R \mathbb{Z}_l$, then compute, for all $i \in (1,...,d)$, $\alpha J_i$.

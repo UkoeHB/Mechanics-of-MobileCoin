@@ -1,0 +1,288 @@
+\begin{appendices}
+
+\renewcommand{\theFancyVerbLine}{%
+	\textcolor{red}{\small
+		\arabic{FancyVerbLine}}}
+
+\chapter{{\tt TXTYPE\_RCT\_1} Transaction Structure}
+\label{appendix:TXTYPE_RCT_1}
+
+We present in this appendix a dump from a MobileCoin transaction of type {\tt TXTYPE\_RCT\_1}, 
+together with explanatory notes for relevant fields. The dump was obtained from MobileCoin's `full-service' wallet back-end \cite{mobilecoin-full-service-source-code} using the {\tt get\_mc\_protocol\_transaction} endpoint.
+
+For editorial reasons we have cut out large parts of the transaction, replacing them with ellipses and noting what was removed. We have also shortened long hexadecimal chains, presenting only the beginning and end as in {\tt 262a6dc1b4712123e1e06740fa8c2342f0c6[...]41d3a5286f}.
+
+Once verified by nodes, all parts of a transaction, aside from components {\tt outputs}, {\tt fee}, and {\tt key\_image}, are discarded. Assuming transaction authors don't retain copies, and there are no SGX breaches being exploited, the contents of transactions `merged' into the blockchain will be completely lost.
+
+Our sample transaction has 2 inputs and 2 outputs.
+
+\begin{Verbatim}[commandchars=\\\{\}, numbers=left]
+"prefix": \{
+  "inputs": [
+    \{
+      "ring": [
+        \{
+          "amount": \{
+            "commitment": "262a6dc1b4712123e1e06740fa8c2342f0c6[...]41d3a5286f",
+            "masked_value": "5812746746486261999"
+          \},
+          "target_key": "9a2c70622ea9268d8bef3995cf0e8b55ca64bd[...]bf6e264f19",
+          "public_key": "105bd961094980a985e655f525c3d4eb519f89[...]e6e88caa21",
+          "e_fog_hint": "be9c4fb3e1ae4dd3ac974cf9b912c8ec0d6fbd[...]90ac970100"
+        \},
+        \{
+          "amount": \{
+            "commitment": "38cb7ac811d299d78ca688d5320c7839bb05[...]831e27d162",
+            "masked_value": "8485203080731247802"
+          \},
+          "target_key": "4ce5165723f3ac35777ad05b92dc3d1673790c[...]40ed7d5827",
+          "public_key": "1402da2d31deff93fc4aad7d44ba5f010bce06[...]c7f4018d65",
+          "e_fog_hint": "00000000000000000000000000000000000000[...]0000000000"
+        \},
+        ... 9 more ring members
+      ],
+      "proofs": [
+        \{
+          "index": "1367",
+          "highest_index": "12971",
+          "elements": [
+            \{
+              "range": \{
+                "from": "1367",
+                "to": "1367"
+              \},
+              "hash": "7f14b20b05d3cbc8a2d7695aecee5fd41df9a51a[...]e27402d7cf"
+            \},
+            ... 14 more elements
+          ]
+        \},
+        ... 10 more membership proofs
+      ]
+    \}
+  ],
+  "outputs": [
+    \{
+      "amount": \{
+        "commitment": "eabec03023e61b94be61b3d5a0d7b692a17fbc8b[...]c1f8bf0b67",
+        "masked_value": "15930548794624239600"
+      \},
+      "target_key": "3ef6413f649c1153d9f727bff7e2b8e17e5df6c9de[...]f90f7f1b3d",
+      "public_key": "6acd0c9400aafaf7bfcec6649b5527638eeb3ebaca[...]ad3ebb3c05",
+      "e_fog_hint": "1322b802c2ecbd392c726686818a5d4023f95f343c[...]a496cdfafb"
+    \},
+    \{
+      "amount": \{
+        "commitment": "781cc27424252c9f16657dc2935e3ab3972362af[...]4508d38db0",
+        "masked_value": "17147565098074236509"
+      \},
+      "target_key": "3643866e770086dd46e5f7728c887bde4d52fbf866[...]8d3dae341e",
+      "public_key": "70142cf2cf81433c2d0f034e95af8d214e11f98a83[...]e52a7ff5f1",
+      "e_fog_hint": "5bfdcd4be7d3efc0a85e133dee0a9273fa7c6ef521[...]04e9e10101"
+    \}
+  ],
+  "fee": "10000000000",
+  "tombstone_block": "4377"
+\},
+"signature": \{
+  "ring_signatures": [
+    \{
+      "c_zero": "5422f19a19f1ae8fae392970f1956917370326fd4d8b50[...]a9b5238fe7",
+      "responses": [
+        "6ffae81179a2f7d08b80ff2e65f989afa7ac4c2aad269b565f1d5d8905fb3f0a",
+        "235c6e815af40a0bb771b4523421eb070d7914c3c98426be7864aaee6b929e0a",
+        "cdd77b59b391c0f23e3d536e413c8e2148876a9550efd641ae71811693bc440e",
+        "cb03858631a62681b5a9e6bcb31d9dc057a137e71d00eeecbbc1a2b035d33c0c",
+        "f95120a9e8790b835a9b07831577841c516a4b02bba3fd7043a0243411208c0f",
+        "90bf683446463a3bfdcb22d4f8761b370347ad6839dea64a428da274e872b50f",
+        "5243672def3f1550a5e4835c3b32b6716fcc8bd2d0cdfdf58eae1bea2fc38409",
+        "0d5e5b466d93d99b14312c582de9a70f0f517ab391457892dd31f411dba5de01",
+        "97e0b08822765043741740841706b2ebf943cbb7155ae1da861875c0f9683000",
+        "f64b00670f337646e59adfe7d9445bfe3a2a7bdb3c6979962dc79b531faf400c",
+        "7a1f4d9110783a03e2086178881a605ca3c200741ad1d0895d68dcc0c3f8040f",
+        "2be0531a2d377ef3b61de7990cc7738dcd7204b7c334f811586df87f659c8705",
+        "8dd611f6fa1e7aa37ad31eec622651ec2aa6fac025ce54dcdbf35b257b441c09",
+        "0caac06183b9a6e25ec56aa7b5dc32d38f3258fcdf5033bfbfd5fc1d8573b304",
+        "8d60665d8e45f46bef44a107bfcb1b5025d25ba8480d3e0480c85b0cc2644507",
+        "4083f83e9032e185b64177613689cbcab8e3b552ff2fc4b698bb8dda6bca6d0d",
+        "9c5e7695ae7997f9135d297246053d3198d74f6696f9494b66e8137b27c2dd0a",
+        "74c4fee37278af3f65043856b0d50856b0501a4ec15ced28d5fd63b77e97b10d",
+        "3a3b948b7b9bc4a209908c4c12bad195a91d9e600977767993b7ef6db97de305",
+        "5403ca939dda2c5fc9ed22eadc3c858e387bb82dc244ab29b1d448d94e639d04",
+        "c4daf4e968b3e69c50c50061596e46db481db6989faec2fa8ea51061b7f96e00",
+        "9b0d053337ae82fc4e4d6904c9942f8aec28a03502b101a48e2220adbf306206"
+      ],
+      "key_image": "c2cf8a58a9f1f5fcdd88181d16eede697f176980b6b[...]dee3dc79a3"
+    \}
+  ],
+  "pseudo_output_commitments": [
+    "6e566450428b4a589a7f97fe88d60a558b327ab56ae03076494dbb658675f00a"
+  ],
+  "range_proofs": "ba5e39a27daedc0f02a9bd19f9b83d8394ab6d[...]8f6ef8745e53a009"
+\}
+\end{Verbatim}
+
+
+
+\section*{Transaction components}
+	
+\begin{itemize}
+	\item {\tt inputs} (lines 2-43) - List of inputs (there is one here).
+	\item {\tt ring} (lines 4-24) - Ring members of the first input. These are outputs copied explicitly from the blockchain record into the transaction structure.
+	\item {\tt commitment} (line 7) - Commitment for the first ring member of the first input (Section \ref{sec:ringct-introduction}).
+	\item {\tt masked\_value} (line 8) - Field $\textrm{\em masked\_value}_t$, for the first ring member of the first input (Section \ref{sec:pedersen-ringct}).
+	\item {\tt target\_key} (line 10) - One-time destination key (address) for the first ring member of the first input (Section \ref{sec:one-time-addresses}).
+	\item {\tt public\_key} (line 11) - The transaction output (txout) public key for the first ring member of the first input (Section \ref{sec:one-time-addresses}).
+	\item {\tt e\_fog\_hint} (line 12) - Encrypted fog hint for the first ring member of the first input (Section \ref{subsec:fog-encrypted-fog-hints}). Note that the second ring member's fog hint in line 21 is all zeroes, implying it is a fee output. Currently MobileCoin fee outputs are not differentiated from normal outputs when constructing transactions, even though practically speaking fee outputs (which are public knowledge --- recall Section \ref{sec:blockchain-transaction-fees} footnote \ref{footnote:fee-output-public-knowledge}) are not useful as decoy members of a ring signature. Since MobileCoin blocks are created very quickly once nodes start working on an SCP slot, most blocks will only `contain' one transaction unless MobileCoin transaction volume becomes very large. Combine this with the fact most transactions will have two outputs (one for the recipient, one for sending change back to the sender) means on average 1/3\rd of on-chain outputs will be fee outputs. Therefore the average effective ring size is 2/3\rds its nominal value (11 in the initial version of MobileCoin, so about 7-8 on average). One way MobileCoin could reduce this problem (which also leads to unnecessary blockchain bloat) is implementing a `fee epoch' where fees are recorded in clear text in blocks and nodes only create a fee output e.g.\ every 1000 blocks.
+	\item {\tt proofs} (lines 25-41) - Membership proofs showing the first ring's members exist in the blockchain (Section \ref{subsec:mobilecoin-membership-proofs}).
+	\item {\tt index} (line 27) - Index of the first ring member of the first input (i.e.\ the output's index within the blockchain record).
+	\item {\tt highest\_index} (line 28) - Index of the newest output in the blockchain at the time this membership proof was created. Technically it could be any existing output in the blockchain with index higher than the ring member, but in practice it is likely to be the newest output (at the time the proof was created).
+	\item {\tt elements} (lines 29-38) - Membership proof elements, each is a node in the proof's Merkle tree.
+	\item {\tt range} (lines 31-34) - Range of elements this proof node represents. Since the {\tt from} and {\tt to} fields are the same, this must be a leaf node.
+    \item {\tt hash} (line 25) - The hash value of this proof node.
+
+    \item {\tt outputs} (lines 44-63) - The outputs created by this transaction (there are two). Outputs have the same content fields as ring members, since ring members are just outputs copied from the blockchain.
+    \item {\tt fee} (line 64) - Transaction fee in clear text, in this case 0.01 MOB (Section \ref{sec:blockchain-transaction-fees}).
+    \item {\tt tombstone\_block} (line 65) - A future block’s index selected by the transaction author. If this transaction has not been added to the blockchain by the time its tombstone block has been created, then the transaction `dies’ and is no longer eligible for adding to the chain.
+
+    \item {\tt ring\_signatures} (lines 68-96) - MLSAG signature for the transaction input (there is one; Section \ref{subsec:ringct-full-signature}).
+    \item {\tt c\_zero} (line 70) - Component \(c_1\) from the first input's MLSAG signature (Section \ref{sec:MLSAG}; note that the MobileCoin implementation uses 0-base indexing for MLSAGs, but for consistency/clarify we stick with 1-base indexing).
+    \item {\tt responses} (lines 71-94) - In alternating order, components \(r_{i,1}\) and \(r_{i,2}\) from the first input's MLSAG signature
+    \[\sigma_j(\mathfrak{m}) = (c_1, r_{1, 1}, r_{1, 2}, ..., r_{v+1, 1}, r_{v+1, 2})\]
+    \item {\tt key\_image} (line 95) - Key image $\tilde{K}_j$ for the first input ($j = 1$; Section \ref{sec:blsag}).
+
+    \item {\tt pseudo\_output\_commitments} (lines 98-100) - Pseudo output commitment $C'^a_j$ for the input (Section \ref{sec:pedersen-ringct}). Please recall that the sum of these commitments will equal the sum of the two output commitments of this transaction (plus the transaction fee commitment $f H$).
+    \item {\tt range\_proofs} (line 101) - Bulletproof proof elements concatenated together into one blob (Bulletproofs were not explored in this document, so we will not itemize further)\vspace{.175cm}
+    \[\Pi_{BP} = (A, S, T_1, T_2, t_x, t^{blinding}_x, e^{blinding}, \mathbb{L}, \mathbb{R}, a, b)\]
+\end{itemize}
+
+
+
+
+\chapter{Block Content}
+\label{appendix:block-content}
+
+In this appendix we show the structure of a sample block, namely the 5\nth block after the origin block (i.e.\ the 6\nth block overall), obtained from the MobileCoin `full-service' wallet back-end \cite{mobilecoin-full-service-source-code} with endpoint {\tt get\_block}. The block has two outputs and one key image.
+
+We can infer this block was created from one transaction with one input and one output, since all transactions must have an input (but there is only one key image), and one output from every block must be for the block fee.
+
+\begin{Verbatim}[commandchars=\\\{\}, numbers=left]
+"block": \{
+  "id": "3f30b6d56cd5045419d7607517ccc6cbea62839d772afe8642d8075072cf7f11",
+  "version": "0",
+  "parent_id": "46504c990b572eb48a7cd29cb5c8891b90513678a290e6e7235ab8947644182a",
+  "index": "5",
+  "cumulative_txo_count": "28",
+  "root_element": \{
+    "range": \{
+      "from": "0",
+      "to": "31"
+    \},
+    "hash": "72276f5c57bcfc585050c6b4f33eefcc6f0a47ef79aeeaa68593af608108b7e9"
+  \},
+  "contents_hash": "f802d38eb533a8497099f8e04564943abdc6e34c566c2045bbeaa46e0ad170b4"
+\},
+"block_contents": \{
+  "key_images": [
+    "0a204451a2b6c0795f1814f5cf490d8b69c9fb9c244252d88b76be842ab1ec4ca22e"
+  ],
+  "outputs": [
+    \{
+      "amount": \{
+        "commitment": "cafbcf8f05b29a7f231cbb4c955f3cd8997b32d50758ceda2de3591c314d083f",
+        "masked_value": "12747939974205126347"
+      \},
+      "target_key": "58a5cd624cb0eaf44c5429e8e9dd53ca339ee21819847fe0f09307c1bd7a6e3e",
+      "public_key": "86347301b9910e067fc94ac9c90381fc8dd521812006af48440fbd9f64eeea20",
+      "e_fog_hint": "00000000000000000000000000000000000000[...]000000000000000000000"
+    \},
+    \{
+      "amount": \{
+        "commitment": "1640896f882ea29d0bf6de88cc30b59fa520509c3905e5a8a55cefdde7e52f55",
+        "masked_value": "1506083220302024919"
+      \},
+      "target_key": "a82316cd7b844689ca7d907cda38fb48a660c301aaee3a277791a11a34e56772",
+      "public_key": "f451c9927e6b1c73265f37bc93b7a042addc627137ab1082d8f42b88b2917a6f",
+      "e_fog_hint": "f1b2f8a048385516a936affc895e0356120f15[...]765c36adaae2981910100"
+    \}
+  ]
+\}
+\end{Verbatim}
+
+
+
+\section*{Block components}
+
+\begin{itemize}
+    \item {\tt block} (lines 1-15) - This block's header.
+    \item {\tt id} (line 2) - This block's block ID.
+    \item {\tt version} (line 3) - Block format version.
+    \item {\tt parent\_id} (line 4) - Parent block's ID.
+    \item {\tt index} (line 5) - This block's index in the ledger.
+    \item {\tt cumulative\_txo\_count} (line 6) - Total number of outputs in the ledger (including those added by this block).
+    \item {\tt root\_element} (lines 7-13) - Merkle root of the outputs that existed in the chain before this block was created (recall Chapter \ref{chapter:membership-proofs}).
+    \item {\tt range} (lines 8-11) - Range of elements covered by the root element (i.e.\ the size of the Merkle tree's base layer). Since there were only 26 outputs on-chain before this block was made, there must be 6 null elements in the base layer of the tree that made this root element.
+    \item {\tt hash} (line 12) - The Merkle root hash of the root element.
+    \item {\tt contents\_hash} (line 14) - A hash of the block contents.
+    \item {\tt block\_contents} (lines 16-40) - All block contents added to the chain by this block.
+    \item {\tt key\_images} (lines 17-19) - Key images added to the chain by this block, corresponding to outputs spent by the transactions validator enclaves used to assemble this block. There is only one key image here.
+    \item {\tt outputs} (lines 20-39) - New outputs added to the chain by this block.
+    \item {\tt commitment} (line 23) - The first output's commitment (recall Chapter \ref{chapter:pedersen-commitments}).
+    \item {\tt masked\_value} (line 24) - The amount contained in the output commitment, masked so only the recipient can read it (recall Section \ref{sec:pedersen-ringct}).
+    \item {\tt target\_key} (line 26) - One-time address of the output.
+    \item {\tt public\_key} (line 27) - Txout public key of the output.
+    \item {\tt e\_fog\_hint} (line 28) - Encrypted fog hint of the output. The first output's fog hint is all zeroes, likely indicating it is the fee output of this block.
+\end{itemize}
+
+
+
+
+\chapter{Origin Block}
+\label{appendix:origin-block}
+
+In this appendix we show the structure of MobileCoin's origin block, obtained from the MobileCoin `full-service' wallet back-end \cite{mobilecoin-full-service-source-code} with endpoint {\tt get\_block}. The block has 16 outputs and no key images. Those outputs contain the entire original supply of MobileCoin (250 million MOB). %[[[needs citation!]]]
+
+The contents of this block are fairly self-explanatory. See Appendix \ref{appendix:block-content} for an overview of block contents.
+
+\begin{Verbatim}[commandchars=\\\{\}, numbers=left]
+"block": \{
+  "id": "c502dcac6985ade2766af6a4bd1973f4af71aa4136c6f6bf61001b21e5ddf9ae",
+  "version": "0",
+  "parent_id": "0000000000000000000000000000000000000000000000000000000000000000",
+  "index": "0",
+  "cumulative_txo_count": "16",
+  "root_element": \{
+    "range": \{
+      "from": "0",
+      "to": "0"
+    \},
+    "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  \},
+  "contents_hash": "a099ec3bfedc4a9c5e876a3ef1a35a972e7789a3cd35a4b842094c517d631531"
+\},
+"block_contents": \{
+  "key_images": [],
+  "outputs": [
+    \{
+      "amount": \{
+        "commitment": "9e6f1564d04a6e60a3d989dba26426b07e0ef9cc1e63915e538fd06ba56b0558",
+        "masked_value": "16611767762345837"
+      \},
+      "target_key": "aaa06df144812f7c09e41e3414fa5dedfa8628e41981880c36d13c5e58cac11e",
+      "public_key": "bcdf3c85183307bcecb0f99734118f29f5bc74e79eae44bd577606de9f129405",
+      "e_fog_hint": "436f7669642056616363696e6520557020746f20393[...]3066633431373535"
+    \},
+    \{
+      "amount": \{
+        "commitment": "6aebc04b8d5a901064f2f5306aebab723184c22041e8b6552310825c8857ed14",
+        "masked_value": "13677070265391552919"
+      \},
+      "target_key": "1a3803da55c57e8016a040bda881e96b8beb203f631df57562ac873b24eec301",
+      "public_key": "0a219aad7e9066bc317b05f57d4555fc21ea58d61255c3e128b61cae5ed4545f",
+      "e_fog_hint": "436f7669642056616363696e6520557020746f20393[...]3066633431373535"
+    \},
+    ... 14 more outputs
+  ]
+\}
+\end{Verbatim}
+
+\end{appendices}
