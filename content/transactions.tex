@@ -1,7 +1,7 @@
 \chapter{Ring Confidential Transactions (RingCT)}
 \label{chapter:transactions}
 
-Throughout Chapters \ref{chapter:addresses} and \ref{chapter:pedersen-commitments} we built up several aspects of MobileCoin transactions. At this point a simple one-input, one-output transaction from some unknown author to some unknown recipient sounds like:
+Throughout Chapters \ref{chapter:addresses} and \ref{chapter:pedersen-commitments}, we built up several aspects of MobileCoin transactions. At this point a simple one-input, one-output transaction from some unknown author to some unknown recipient sounds like:
 
 ``I will spend old output $X$ (note that it has a hidden amount $A_X$, committed to in $C_X$). I will give it a pseudo output commitment $C'_X$. I will make one output $Y$, which has txout public key $r_t K^{s,i}$ and may be spent by the one-time address $K^o_Y$. It has a hidden amount $A_Y$ committed to in $C_Y$, encrypted for the recipient, and proven in range with a Bulletproofs-style range proof. Please note that $C'_X - C_Y = 0$."
 
@@ -17,7 +17,7 @@ As mentioned in Section \ref{sec:one-time-addresses}, we can prove ownership of 
 
 MobileCoin is a cryptocurrency under steady development. Transaction structures, protocols, and cryptographic schemes are always prone to evolving as new innovations, objectives, or threats are identified.
 
-In this report we have focused our attention on {\em Ring Confidential Transactions}, a.k.a.\ {\em RingCT}, as they are implemented\marginnote{transaction/ std/src/ transaction\_ builder.rs {\tt build()}} in the current version of MobileCoin. The flavor of RingCT we have discussed so far, and which will be further elaborated in this chapter, is based on Monero's transaction type {\tt RCTTypeBulletproof2} \cite{ztm-2}. Its name is {\tt TXTYPE\_RCT\_1} to represent that it's the first variant of RingCT implemented in MobileCoin.
+In this report, we have focused our attention on {\em Ring Confidential Transactions} \cite{MRL-0005-ringct}, a.k.a.\ {\em RingCT}, as they are implemented\marginnote{transaction/ std/src/ transaction\_ builder.rs {\tt build()}} in the current version of MobileCoin. The flavor of RingCT we have discussed so far, and which will be further elaborated in this chapter, is based on Monero's transaction type {\tt RCTTypeBulletproof2} \cite{ztm-2}. We name it {\tt TXTYPE\_RCT\_1} to represent that it's the first variant of RingCT implemented in MobileCoin.
 
 We present a conceptual summary of transactions in Section \ref{sec:transaction_summary}.
 
@@ -44,7 +44,7 @@ The sender calculates pseudo output commitments for the input amounts, $C'^a_{\p
 
 He knows the private keys $z_1,...,z_m$ to the commitments to zero $(C^a_{\pi,1} - C'^a_{\pi,1}),...,(C^a_{\pi,m} - C'^a_{\pi,m})$.
 
-For verifiers to confirm transaction amounts sum to zero, the fee amount must be converted into a commitment. The solution is to calculate the commitment of the fee $f$ without the masking effect of any blinding factor. That is, $C(f) = f H$.
+For verifiers to confirm that transaction amounts sum to zero, the fee amount must be converted into a commitment. The solution is to calculate the commitment of the fee $f$ without the masking effect of any blinding factor. That is, $C(f) = f H$.
 
 Now\marginnote{[MC-tx] src/ring\_ signature/ rct\_bullet- proofs.rs {\tt verify()}} we can prove input amounts equal output amounts:\\
 \[(\sum_j C'^a_{j} - \sum_t C^b_{t}) - f H = 0\]
@@ -53,7 +53,7 @@ Now\marginnote{[MC-tx] src/ring\_ signature/ rct\_bullet- proofs.rs {\tt verify(
 \subsection{Signature}
 \label{subsec:ringct-full-signature}
 
-The sender selects $m$ sets of size $v$ of additional unrelated one-time addresses and their commitments from the blockchain, corresponding to apparently unspent outputs.\footnote{\label{input-selection}In the initial version of MobileCoin it is standard for the sets\marginnote{mobile- coind/src/ payments.rs {\tt get\_rings()}} of `additional unrelated addresses' to be selected at random from the set of outputs existing in the chain. This method permits the `guess-newest' heuristic, which says the most `recent' output in a ring is likely to be the true signer about 80\% of the time \cite{AnalysisOfLinkability}. Since MobileCoin transactions are validated in secure enclaves, an analyst of the MobileCoin blockchain can only use that heuristic if they break into a secure enclave participating in the MobileCoin network. Future versions of MobileCoin will hopefully improve the ring member selection algorithm, for example by selecting randomly from `nearby' the real output being spent. By nearby we just mean outputs added to the blockchain around the same time, so they have similar indices. This method is essentially a binning procedure where the entire ring is a bin. First select a random offset in the range $[-x, x]$ and add it to the real output's on-chain index. That offsetted index is the center of the bin, which ranges $[-x, x]$ around its center. Randomly select indices from within the bin for use as decoy ring members. Another option is selecting from a gamma distribution over the set of on-chain outputs~\cite{AnalysisOfLinkability} (used in Monero~\cite{ztm-2}).}\footnote{In Nakamoto-based cryptocurrencies it is typically necessary to wait for several blocks after obtaining an output before it can be spent. For example, Monero enforces a default spendable age of 10 blocks at the protocol level~\cite{ztm-2} (equating to 20 minutes of delay). Since MobileCoin uses the Stellar Consensus Protocol, which has a different threat model than Nakamoto consensus, it is considered safe to spend outputs as soon as they are acquired (which in practice can result in delays on the order of 5-10 seconds between receipt and spend of an output).} To sign input $j$, she combines a set of size $v$ with her own $j$\nth unspent one-time address (placed at unique index $\pi$) into a {\em ring}, along with false commitments to zero, as follows:\vspace{.175cm}
+The sender selects $m$ sets of size $v$ of additional unrelated one-time addresses and their commitments from the blockchain, corresponding to apparently unspent outputs.\footnote{\label{input-selection}In the initial version of MobileCoin, it is standard for the sets\marginnote{mobile- coind/src/ payments.rs {\tt get\_rings()}} of `additional unrelated addresses' to be selected at random from the set of outputs existing in the chain. This method permits the `guess-newest' heuristic, which says the most `recent' output in a ring is likely to be the true signer about 80\% of the time \cite{AnalysisOfLinkability}. Since MobileCoin transactions are validated in secure enclaves, an analyst of the MobileCoin blockchain can only use that heuristic if they break into a secure enclave participating in the MobileCoin network. Future versions of MobileCoin will hopefully improve the ring member selection algorithm, for example by selecting randomly from `nearby' the real output being spent. By nearby we just mean outputs added to the blockchain around the same time, so they have similar indices. This method is essentially a binning procedure where the entire ring is a bin. First, select a random offset in the range $[-x, x]$ and add it to the real output's on-chain index. That offsetted index is the center of the bin, which ranges $[-x, x]$ around its center. Randomly select indices from within the bin for use as decoy ring members. Another option is selecting from a gamma distribution over the set of on-chain outputs~\cite{AnalysisOfLinkability} (used in Monero~\cite{ztm-2}).}\footnote{In Nakamoto-based cryptocurrencies, it is typically necessary to wait for several blocks after obtaining an output before it can be spent. For example, Monero enforces a default spendable age of 10 blocks at the protocol level~\cite{ztm-2} (equating to 20 minutes of delay). Since MobileCoin uses the Stellar Consensus Protocol, which has a different threat model than Nakamoto consensus, it is considered safe to spend outputs as soon as they are acquired (which in practice can result in delays on the order of 5-10 seconds between receipt and spend of an output).} To sign input $j$, she combines a set of size $v$ with her own $j$\nth unspent one-time address (placed at unique index $\pi$) into a {\em ring}, along with false commitments to zero, as follows:\vspace{.175cm}
 \begin{align*}
     \mathcal{R}_j = \{&\{K^o_{1, j}, (C_{1, j} - C'^a_{\pi, j})\}, \\
     &... \\
@@ -89,13 +89,13 @@ The network only needs to verify\marginnote{consensus/ service/src/ validators.r
 \section{Space requirements}
 \label{sec:ringct-space-and-ver}
 
-MobileCoin does not use the common Nakamoto consensus mechanism for consensuating transactions employed by cryptocurrencies like Bitcoin \cite{Nakamoto_bitcoin} and Monero \cite{cryptoNoteWhitePaper}. In those blockchains it is important for the network to retain complete copies of all transactions so new participants can validate the chain independently. However, in MobileCoin once a transaction has been validated most of its data is discarded, and never gets stored in the blockchain (see Chapters \ref{chapter:blockchain} and \ref{chapter:consensus}).\\
+MobileCoin does not use the common Nakamoto consensus mechanism for consensuating transactions, employed by cryptocurrencies like Bitcoin \cite{Nakamoto_bitcoin} and Monero \cite{cryptoNoteWhitePaper}. In those blockchains it is important for the network to retain complete copies of all transactions so new participants can validate the chain independently. However, in MobileCoin once a transaction has been validated, most of its data is discarded, and never gets stored in the blockchain (see Chapters \ref{chapter:blockchain} and \ref{chapter:consensus}).\\
 
 While transaction data may be discarded after validation, exactly how large a transaction is has implications for the network burden of passing it around.
 
 \subsubsection*{MLSAG signature}
 
-From Section \ref{sec:MLSAG} we recall that an MLSAG signature in this context would be expressed as
+From Section \ref{sec:MLSAG}, we recall that an MLSAG signature in this context would be expressed as
 
 \hfill \(\sigma_j(\mathfrak{m}) = (c_1, r_{1, 1}, r_{1, 2}, ..., r_{v+1, 1}, r_{v+1, 2}) \textrm{ with } \tilde{K}^o_j \) \hfill \phantom{.}
 
@@ -109,30 +109,32 @@ An\marginnote{[MC-tx] src/range\_pr- oofs/mod.rs {\tt check\_ran- ge\_proofs()}}
 
 \subsubsection*{Outputs}
 
-An output consists of an output commitment and 8-byte encrypted amount, a one-time address and txout public key, and\marginnote{[MC-tx] src/tx.rs {\tt {\em struct} TxOut}} an 82-byte encrypted fog hint (see Section \ref{subsec:fog-encrypted-fog-hints}). This comes out to $p*(3*32 + 8 + 82) = p*186$ bytes for all the outputs in a transaction.
+An output consists of an output commitment and 8-byte encrypted amount, a one-time address and txout public key, and\marginnote{[MC-tx] src/tx.rs {\tt {\em struct} TxOut}} an 84-byte encrypted fog hint (see Section \ref{subsec:fog-encrypted-fog-hints}). This comes out to $p*(3*32 + 8 + 84) = p*188$ bytes for all the outputs in a transaction.
 
 \subsubsection*{Inputs}
 
 Transaction verifiers (secure enclaves) are not expected to have free access to the blockchain, so they must get copies of input ring members from the transaction author. A transaction input contains copies of the old outputs used as ring members (including the real output being spent), and membership proofs for each of them.
 
-Recalling Section \ref{subsec:mobilecoin-membership-proofs}, a membership proof contains two 8-byte indices and a set of `membership elements'. A membership element has a `range' which is two 8-byte indices, and a 32-byte hash. Membership elements correspond to nodes in the Merkle proof, and if the Merkle tree is 31 nodes deep (which would be possible if the blockchain had on the order of 2 billion outputs, not an unreasonable number in the long run) then you would require 32 elements for the entire proof. Therefore, for a Merkle tree $n$ nodes deep, one proof is $(16 + n*(16 + 32))$ bytes.%[[[revisit if proofs are simplified in future versions]]]
+Recalling Section \ref{subsec:mobilecoin-membership-proofs}, a membership proof contains two 8-byte indices and a set of `membership elements'. A membership element has a `range' which is two 8-byte indices, and a 32-byte hash. Membership elements correspond to nodes in the Merkle proof, and if the Merkle tree is 31 nodes deep (which would be possible if the blockchain had on the order of 2 billion outputs, not an unreasonable number in the long run), then you would require 32 elements for the entire proof. Therefore, for a Merkle tree $n$ nodes deep, one proof is $(16 + (n + 1)*(16 + 32))$ bytes.%[[[revisit if proofs are simplified in future versions]]]
 
-Each ring member has a membership proof and 186-byte output copy, so a transaction input is $(v + 1)*(202 + 48*n)$ bytes.
+Each ring member has a membership proof and 188-byte output copy, so a transaction input is $(v + 1)*(252 + 48*n)$ bytes.
 
 \subsubsection*{On-chain storage}
 
-Only the information necessary to make new transactions is saved in the blockchain. Specifically, only key images\marginnote{ledger/db/ src/lib.rs {\tt {\em struct} LedgerDB}} and outputs are saved, so only $m*32 + p*186$ bytes per transaction are stored in the blockchain.\footnote{With a ring size of 11, Merkle tree depth of 31, and 16 inputs and outputs, one full transaction will be 322,976 bytes. After discarding non-essential information, it reduces to 3,488 bytes.}
-%19138 * 16 = 306208 inputs
-%186 * 16 = 2976 outputs
+Only the information necessary to make new transactions is saved in the blockchain. Specifically, only key images\marginnote{ledger/db/ src/lib.rs {\tt {\em struct} LedgerDB}} and outputs are saved, so only $m*32 + p*188$ bytes per transaction are stored in the blockchain.\footnote{With a ring size of 11, Merkle tree depth of 31, and 16 inputs and outputs, one full transaction will be 323,040 bytes. After discarding non-essential information, it reduces to 3,520 bytes.}
+%19140 * 16 = 306240 inputs
+%17072 (membership proofs)
+%188 * 16 = 3008 outputs
 %992 BP [[[reduces to 928 without pseudo outputs range proofed]]]
-%12800 MLSAGs
+%736 BP (1in-1out)
+%800*16 = 12800 MLSAGs
 
 \section{Miscellaneous semantic rules in MobileCoin}
 \label{sec:misc-semantic-rules}
 
 Even with robust cryptographic mechanisms for preserving the privacy of users, seemingly harmless implementation details can give away a lot of information about what they are up to \cite{monero-tx-extra-statistics,update-tx-supplement-proposal-monero}.
 
-To promote transaction uniformity regardless of who makes them, MobileCoin has a number of purely semantic rules\marginnote{[MC-tx] src/validat- ion/ validate.rs} governing how one may be constructed.\footnote{In the launch version of MobileCoin transaction outputs are not required to be sorted (although they are sorted by default\marginnote{transaction/ std/src/ transaction\_ builder.rs {\tt build()}} when constructing a transaction). Hopefully future versions of the protocol will add that requirement (see \cite{mc-pull-request-validate-sorted-outputs-in-tx}).}
+To promote transaction uniformity regardless of who makes them, MobileCoin has a number of purely semantic rules\marginnote{[MC-tx] src/validat- ion/ validate.rs} governing how one may be constructed.\footnote{In the launch version of MobileCoin, transaction outputs are not required to be sorted (although they are sorted by default\marginnote{transaction/ std/src/ transaction\_ builder.rs {\tt build()}} when constructing a transaction). Hopefully future versions of the protocol will add that requirement (see \cite{mc-pull-request-validate-sorted-outputs-in-tx}).}
 
 \begin{enumerate}
     \item A transaction is limited to a maximum of 16 inputs and 16 outputs.
@@ -191,7 +193,7 @@ To close out this chapter, we present the main content of a transaction, organiz
     \end{itemize}
 
     \item \underline{Transaction fee}: A value communicated in clear text multiplied by $10^{12}$ (i.e.\ in `picoMOB' atomic units, see Section \ref{subsec:blockchain-mobilecoin-money-creation}), so a fee of 1.0 would be recorded as 1000000000000.
-    \item \underline{Tombstone block}: A future block's index selected by the transaction author. If the transaction has not been added to the blockchain by the time its tombstone block has been created, then the transaction `dies' and is no longer eligible for adding to the chain.\footnote{In the initial version of MobileCoin, a transaction must\marginnote{[MC-tx] src/valida- tion/vali- date.rs {\tt validate\_ tombstone()}} be submitted within 100 blocks of its tombstone block, otherwise it will be considered invalid. This requirement will likely inhibit applications of multisignaures \cite{ztm-2} where transactions take a while to construct and it isn't possible to accurately/reliably estimate when they will be submitted to the network. Hopefully future versions of the MobileCoin protocol will change or remove this behavior.}\footnote{See Section \ref{subsec:fog-ingress-keys} for a use-case for tombstone blocks.}
+    \item \underline{Tombstone block}: A future block's index selected by the transaction author. Each transaction must be added to the blockchain before its tombstone block is created, otherwise it is considered `dead' and is no longer eligible for adding to the chain.\footnote{In the initial version of MobileCoin, a transaction must\marginnote{[MC-tx] src/valida- tion/vali- date.rs {\tt validate\_ tombstone()}} be submitted to the network within 100 blocks of its tombstone block, otherwise it will be considered invalid. This requirement will likely inhibit applications of multisignatures \cite{ztm-2} where transactions take a while to construct and it isn't possible to accurately/reliably estimate when they will be submitted to the network. Hopefully future versions of the MobileCoin protocol will change or remove this behavior.}\footnote{See Section \ref{subsec:fog-ingress-keys} for a use-case for tombstone blocks.}
 \end{itemize}
 
 
@@ -199,40 +201,16 @@ To close out this chapter, we present the main content of a transaction, organiz
 \section{Transaction receipts}
 \label{sec:transaction-receipts}
 
-When sending an output to someone it is useful to prove that you sent it. For that purpose MobileCoin has\marginnote{api/proto/ external.proto {\tt Receipt}} so-called `{\tt Receipt}s'. Transaction authors can make a {\tt Receipt} for each of the outputs they create.\footnote{Colloquially you get a `receipt' back after you {\em send} money to someone, rather than getting a receipt alongside money received. MobileCoin's {\tt Receipt} would have been more aptly named {\tt PaymentNotice}.} The contents of a {\tt Receipt} are fairly self-explanatory.
+When sending an output to someone, it is useful to prove that you sent it. For that purpose, MobileCoin has\marginnote{api/proto/ external.proto {\tt Receipt}} so-called `{\tt Receipt}s'. Transaction authors can make a {\tt Receipt} for each of the outputs they create.\footnote{Colloquially you get a `receipt' back after you {\em send} money to someone, rather than getting a receipt alongside money received. MobileCoin's {\tt Receipt} would have been more aptly named {\tt PaymentNotice}.} The contents of a {\tt Receipt} are fairly self-explanatory.
 
 \begin{itemize}
     \item \textbf{txout public key}: The txout public key of the output sent.
 
-    \item \textbf{confirmation number}: Hash of the sender-receiver shared secret, $\mathcal{H}(r_t K^{s,i}_t)$. By recomputing\marginnote{[MC-tx] src/tx.rs {\tt TxOutConfi- rmationNu- mber validate()}} the confirmation number, recipients can gain confidence that whoever sent them the {\tt Receipt} was the output creator (assuming the output actually exists).
+    \item \textbf{confirmation number}: Hash of the sender-receiver shared secret, $\mathcal{H}(r_t K^{v,i}_t)$. By recomputing\marginnote{[MC-tx] src/tx.rs {\tt TxOutConfi- rmationNu- mber validate()}} the confirmation number, recipients can gain confidence that whoever sent them the {\tt Receipt} was the output creator (assuming the output actually exists).\footnote{A {\tt Receipt} can be used to perform a Janus attack (recall Chapter \ref{chapter:addresses} footnote \ref{footnote:janus-attack}). If the attacker knows one subaddress belonging to the victim (e.g. their `normal' subaddress), and suspects that a different subaddress belongs to the same account, then they can create a {\tt Receipt} based on the suspected subaddress. After sending the {\tt Receipt} to the victim, if the victim indicates that the confirmation number was valid, then the attacker will know both subaddresses belong to the victim. The victim has no way to detect this attack, because the {\tt Receipt}'s txout public key and confirmation number cannot be tied to any specific subaddress they own. To fix this attack, you could add a new field to {\tt Receipts} called \textbf{txout base key}, which is simply $r_t G$. Then the victim can compute $k^{s,i} r_t G \stackrel{?}{=}$ \textbf{txout public key}, where $k^{s,i}$ is the private spend key of the subaddress this {\tt Receipt} is {\em supposed} to be based on.}
 
     \item \textbf{tombstone block}: Nominal tombstone block of the transaction that contains the output. This isn't verifiable, but helps the recipient know whether the transaction succeeded or failed. If the output they supposedly own doesn't show up on-chain before the tombstone block, then the transaction probably failed.
 
     \item \textbf{amount}: Nominal amount contained in the output. This can only be verified by looking at the real transaction output. It is included for informational purposes.
 \end{itemize}
 
-
-
-\if 0
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-MobileCoin transactions are based on a myriad of ideas, which we summarize in this section.
-
-For each input commitment $C^a_j$ we created pseudo output commitments $C'^a_j$, then signed commitments to zero $(C^a_j - C'^a_j)$ to show they contain the same amounts. Moreover, the pseudo output blinding factors were selected so the sum of pseudo output commitments equals the sum of output commitments. Those signatures and that sum prove input amounts equal output amounts (Section~\ref{sec:ringct-introduction}).
-
-When a commitment to zero is signed, it is signed along with a signature on the address key $K^o_j$. The pair $(C^a_j, K^o_j)$ constitutes an output found on the blockchain and their signatures are inseparable, ensuring every amount spent in a transaction is exactly the same amount contained in an output being spent. Signing with private key $k^o_j$ demonstrates the output being spent is owned by the spender (Section \ref{subsec:ringct-full-signature}), and if the key image created is unique on the blockchain then it has not been spent before (Section \ref{subsec:ringct-double-spend}).
-
-The signature type used is a ring signature (Section \ref{sec:MLSAG}). Multiple old outputs from the blockchain are combined in a ring, leaving it unclear which ring member is the true output being spent. Pseudo output commitments, and signatures on commitments to zero, are necessary to disconnect the amount balance from input commitments. If input commitments were used directly (i.e.\ by selecting the blinding factors for new outputs created so their sum equals the input commitment blinding factors), then only one combination of ring members would sum to equal the sum of output commitments.\\
-
-MobileCoin transactions are validated inside secure enclaves (Chapter \ref{chapter:enclaves}), which use membership proofs (Section \ref{subsec:mobilecoin-membership-proofs}) to check that ring members can be found in the blockchain. Once a transaction has been added to a block its non-essential content is discarded (including ring members) (Section \ref{sec:ringct-space-and-ver}). Any observer who fails to break into the enclave at the time a transaction is being validated won't even know which ring members were used.\\
-
-New outputs created in a transaction are sent to unique one-time addresses which disguise the real recipient, and the amounts they contain are proven in a legitimate range with range proofs (Section \ref{sec:range_proofs}). The private keys of those addresses (Section \ref{sec:multi_out_transactions}), and the exact amounts received (Section \ref{sec:pedersen-ringct}), are recoverable via Diffie-Hellman exchange with the txout public keys included in those outputs.\\
-
-Verifiers can be confident that transaction authors are spending their own funds without knowing which funds are being spent, how much is being spent, or what other funds they might own!
-
-
-\newpage
-\subsection{Summary: Transaction content}
-\label{subsec:ringct-tx-content-summary}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\fi
 

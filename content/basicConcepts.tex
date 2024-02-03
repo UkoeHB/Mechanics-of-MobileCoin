@@ -22,11 +22,11 @@ Beyond that, we have aimed at being {\em conceptual} in our presentation of algo
 
 However, we don’t see this as a loss. A simple object such as an integer or a string can always be represented by a bit string. So-called `endianness' is rarely relevant, and is mostly a matter of convention for our algorithms.\footnote{In computer memory, each byte is stored in its own address (an address is akin to a numbered slot, which a byte can be stored in). A given `word' or variable is referenced by the lowest address of its bytes. If variable $x$ has 4 bytes, stored in addresses 10-13, address 10 is used to find $x$. The way bytes of $x$ are organized in its set of addresses depends on {\em endianness}, although each individual byte is always and everywhere stored the same way within its address. Basically, which end of $x$ is stored in the reference address? It could be the {\em big end} or {\em little end}. Given $x = $ 0x12345678 (hexadecimal; 2 hexadecimal digits occupy 1 byte e.g.\ 8 binary digits a.k.a.\ bits), and an array of addresses \{10, 11, 12, 13\}, the big endian encoding of $x$ is \{12, 34, 56, 78\} and the little endian encoding is \{78, 56, 34, 12\}. \cite{endianness}}
 
-Elliptic curve points are normally denoted by pairs \((x, y)\), and can therefore be represented with two integers. However, in the world of cryptography it is common to apply {\em point compression} techniques that allow a point to be represented using only the space of one coordinate. For our conceptual approach it is often accessory whether point compression is used or not, but most of the time it is implicitly assumed.\\
+Elliptic curve points are normally denoted by pairs \((x, y)\), and can therefore be represented with two integers. However, in the world of cryptography, it is common to apply {\em point compression} techniques that allow a point to be represented using only the space of one coordinate. For our conceptual approach, it is often accessory whether point compression is used or not, but most of the time it is implicitly assumed.\\
 
-We\marginnote{[blake2] src/ blake2b.rs} have also used cryptographic hash functions freely without specifying any concrete algorithms. In the case of MobileCoin it will typically be BLAKE2b\footnote{The BLAKE2 hashing algorithm is a successor to the NIST standard {\em SHA-3} \cite{nist-sha3} finalist BLAKE. The BLAKE2b variant is optimized for 64-bit platforms. \cite{blake2-paper}}, but if not explicitly mentioned then it is not important to the theory. 
+We\marginnote{[blake2] src/ blake2b.rs} have also used cryptographic hash functions freely without specifying any concrete algorithms. In the case of MobileCoin, it will typically be BLAKE2b\footnote{The BLAKE2 hashing algorithm is a successor to the NIST standard {\em SHA-3} \cite{nist-sha3} finalist BLAKE. The BLAKE2b variant is optimized for 64-bit platforms. \cite{blake2-paper}}, but if not explicitly mentioned then it is not important to the theory. 
 
-A cryptographic hash function (henceforth simply `hash function', or `hash') takes in some message $\mathfrak{m}$ of arbitrary length and returns a hash $h$ (or `message digest') of fixed length, with each possible output equiprobable for a given input. Cryptographic hash functions are difficult to reverse (called preimage resistance), have an interesting feature known as the {\em large avalanche effect} that can cause very similar messages to produce very dissimilar hashes, and it is hard to find two messages with the same message digest.
+A cryptographic hash function (henceforth simply `hash function' or `hash') takes in some message $\mathfrak{m}$ of arbitrary length and returns a hash $h$ (or `message digest') of fixed length, with each possible output equiprobable for a given input. Cryptographic hash functions are difficult to reverse (called preimage resistance), have an interesting feature known as the {\em large avalanche effect} that can cause very similar messages to produce very dissimilar hashes, and it is hard to find two messages with the same message digest.
 
 Hash functions will be applied to integers, strings, curve points, or combinations of these objects. These occurrences should be interpreted as hashes of bit representations, or the concatenation of such representations. Depending on context, the result of a hash will be numeric, a bit string, or even a curve point. Further details in this respect will be given as needed.
 
@@ -48,7 +48,7 @@ Note that, if $a \leq n$, $-a \pmod n$ is the same as $n - a$.
 \subsection{Modular addition and multiplication}
 \label{subsec:modular-addition-multiplication}
 
-In computer science it is important to avoid large numbers when doing modular arithmetic. For example, if we have $29+87 \pmod{99}$ and we aren't allowed variables with three or more digits (such as $116 = 29+87$), then we can't compute $116 \pmod{99} = 17$ directly.
+In computer science, it is important to avoid large numbers when doing modular arithmetic. For example, if we have $29+87 \pmod{99}$ and we aren't allowed variables with three or more digits (such as $116 = 29+87$), then we can't compute $116 \pmod{99} = 17$ directly.
 
 To perform $c = a+b \pmod n$, where $a$ and $b$ are each less than the modulus $n$, we can do this:
 \begin{itemize}
@@ -159,7 +159,7 @@ A - B \pmod n &\rightarrow A + (-B) \pmod n \\
 			  &\rightarrow {[A \pmod {n}] + [-B \pmod{n}]} \pmod{n}
 \end{align*}
 
-The same principle would apply to something like $x = (a-b*c*d)^{-1} (e*f+g^{h}) \pmod n$.\footnote{The modulus of large numbers can exploit modular equations. It turns out $254 \pmod {13} \equiv 2*10*10 + 5*10 + 4 \equiv (((2)*10 + 5)*10 + 4) \pmod {13}$. An algorithm for $a \pmod n$ when $a > n$ is:
+The same principle would apply to something like $x = (a-b*c*d)^{-1} (e*f+g^{h}) \pmod n$.\footnote{The modulus of large numbers can exploit modular equations. For example, we can write $254 \pmod {13} \equiv 2*10*10 + 5*10 + 4 \equiv (((2)*10 + 5)*10 + 4) \pmod {13}$. An algorithm for $a \pmod n$ when $a > n$ is:
 \begin{enumerate}
 	\item Define $A \rightarrow [a_{decimal}]$; $r = 0$
 	\item For $i = A_{size} - 1,...,0$
@@ -190,7 +190,7 @@ Typically, an elliptic curve is defined as the set of all points with coordinate
 The cryptocurrency MobileCoin uses a special curve belonging to the category of so-called {\em twisted Edwards} curves \cite{Bernstein2008-twisted-edwards}, which are commonly expressed as (for a given $(a,d)$ pair):\vspace{.175cm}
 \[a x^2 + y^2 = 1 + d x^2 y^2 \quad \textrm{where} \quad a, d, x, y \in \mathbb{F}_q \]
 
-In what follows we will prefer this second form. The advantage it offers over the previously mentioned Weierstraß form is that basic cryptographic primitives require fewer arithmetic operations, resulting in faster cryptographic algorithms (see Bernstein {\em et al.} in \cite{Bernstein2007-faster-ec-ops} for details).\\
+In what follows, we will prefer this second form. The advantage it offers over the previously mentioned Weierstraß form is that basic cryptographic primitives require fewer arithmetic operations, resulting in faster cryptographic algorithms (see Bernstein {\em et al.} in \cite{Bernstein2007-faster-ec-ops} for details).\\
 
 Let \(P_1 = (x_1, y_1)\) and \(P_2 = (x_2, y_2)\) be two points belonging to a twisted Edwards elliptic curve (henceforth known simply as an EC). We define addition on points by defining $P_1 + P_2 = (x_1, y_1) + (x_2, y_2)$ as the point $P_3 = (x_3, y_3)$ where\footnote{Typically elliptic curve points are converted into projective coordinates (or a similar representation, e.g.\ extended twisted Edwards coordinates \cite{twisted-edwards-revisited}) prior to curve operations like point addition, in order to avoid performing field inversions for efficiency. \cite{ecc-projective}}\vspace{.175cm}
 \begin{align*}
@@ -233,7 +233,7 @@ However, $P_1$ has order 6 which is not prime, so not all of the points it gener
 
 \subsubsection{Group theory: Useful concepts}
 
-We always land somewhere on the ring no matter how many multiples of a point we add together. This lets us simplify scalar multiplication from $nP$ to $[n \pmod u] P$, where $u$ is the order of the point $P$. A point can't actually be multiplied by 0, so if $n \pmod u \stackrel{?}{=} 0$ just multiply by $u$ or return the 0\nth position directly ($I$). The orders of all possible subgroups are divisors of $N$ (by {\em Lagrange’s theorem} \cite{lagranges-theorem}).
+We always land somewhere on the ring no matter how many multiples of a point we add together. This lets us simplify scalar multiplication from $nP$ to $[n \pmod u] P$, where $u$ is the order of the point $P$. A point can't actually be multiplied by 0, so if $n \pmod u \stackrel{?}{=} 0$ just multiply $P$ by $u$ or return the 0\nth position directly ($I$). The orders of all possible subgroups are divisors of $N$ (by {\em Lagrange’s theorem} \cite{lagranges-theorem}).
 
 To find the order, $u$, of any given point $P$'s subgroup:
 \begin{enumerate}
@@ -256,14 +256,14 @@ Put simply, any two points $P_a$ and $P_b$ with order $u$ are in the same subgro
 Elliptic curve points have no concept of `proximity', so for our clock-like example with $N = 6$, $P_3$ is no `closer' or `farther' from $I$ than $P_1$. However, to connect the analogy we can `map' curve points onto the ring. Take any point $P_w$ with order $N$ and put it at position 1, then construct the ring out of multiples of $P_w$. All of the observations we have made so far still hold, and will hold even if the mapping is redone with a different point $P_z$ that also has order $N$.
 
 ECs\marginnote{[dalek25519] src/back- end/serial/
-curve\_ models/ mod.rs} selected for cryptography typically have $N = hl$, where $l$ is some sufficiently large (such as 160 bits) prime number and $h$ is the so-called {\em cofactor} which could be as small as 1 or 2.\footnote{EC with small cofactors allow relatively faster point addition, etc. \cite{Bernstein2008-twisted-edwards}.} One point in the subgroup of size $l$ is usually selected to be the generator $G$ as a convention. For every other point $P$ in that subgroup there exists an integer $0 < n \leq l$ satisfying $P = n G$.
+curve\_ models/ mod.rs} selected for cryptography typically have $N = hl$, where $l$ is some sufficiently large (such as 160 bits) prime number and $h$ is the so-called {\em cofactor} which could be as small as 1 or 2.\footnote{EC with small cofactors allow relatively faster point addition, etc. \cite{Bernstein2008-twisted-edwards}.} One point in the subgroup of size $l$ is usually selected to be the generator $G$ as a convention. For every other point $P$ in that subgroup, there exists an integer $0 < n \leq l$ satisfying $P = n G$.
 
 Based on our understanding from the previous section, we can use the following algorithm to find (non-point-at-infinity) points in the subgroup of order $l$:
 \begin{enumerate}
     \item Find $N$ of the elliptic curve EC, choose subgroup order $l$, compute $h = N/l$.
     \item Choose a random point $P'$ in EC.
     \item Compute $P=h P'$.
-    \item If $P \stackrel{?}{=} I$ return to step 2; otherwise, $P$ is in the subgroup of order $l$.
+    \item If $P \stackrel{?}{=} I$, return to step 2; otherwise, $P$ is in the subgroup of order $l$.
 \end{enumerate}
 
 Calculating the scalar\marginnote{[dalek25519] src/back- end/serial/
@@ -314,7 +314,7 @@ An external observer would not be able to easily calculate the shared secret due
 \subsection{Schnorr signatures and the Fiat-Shamir transform}
 \label{sec:schnorr-fiat-shamir}
 
-In 1989 Claus-Peter Schnorr published a now-famous interactive authentication protocol \cite{schnorr-signatures}, generalized by Maurer in 2009 \cite{simple-zk-proof-maurer}, that allows someone to prove they know the private key $k$ of a given public key $K$ without revealing any information about it \cite{Signatures2015BorromeanRS}. It goes something like this:
+In 1989, Claus-Peter Schnorr published a now-famous interactive authentication protocol \cite{schnorr-signatures}, generalized by Maurer in 2009 \cite{simple-zk-proof-maurer}, that allows someone to prove they know the private key $k$ of a given public key $K$ without revealing any information about it \cite{Signatures2015BorromeanRS}. It goes something like this:
 \begin{enumerate}
 	\item The prover generates a random integer \(\alpha \in_R \mathbb{Z}_l\),\footnote{\label{notation3_note}Notation: The $R$ in \(\alpha \in_R \mathbb{Z}_l\) means $\alpha$ is randomly selected from \(\{1,2,3,...,l-1\}\).\marginnote{[dalek25519] src/scalar.rs {\tt Scalar::ran- dom()}} In other words, $\mathbb{Z}_l$ is all integers$\pmod l$. We exclude `$l$' since the point-at-infinity is not useful here.} computes $\alpha G$, and sends $\alpha G$ to the verifier.
 	\item The verifier generates a random {\em challenge} $c \in_R \mathbb{Z}_l$ and sends $c$ to the prover.
@@ -338,7 +338,7 @@ Using a hash function, instead of the verifier, to generate challenges is known 
 
 \begin{enumerate}
 	\item Generate random number $\alpha \in_R \mathbb{Z}_l$, and compute $\alpha G$.
-	\item Calculate the challenge using a cryptographically secure hash function, \(c = \mathcal{H}(T_p, [\alpha G])\).\footnote{MobileCoin has a policy\marginnote{[MC-tx] src/domain\_ separators.rs} of `domain separating' \cite{domain-separation-context-labels} different uses of hash functions. This in practice means prefixing each `use case' of a hash function with a unique bit-string. We model it here with the tag $T_p$, which might be the text string ``simple Schnorr proof". Domain separated hash functions have different outputs even with the same inputs. For the remainder of this document we leave out domain separation tags for succinctness, but unless otherwise stated all uses of hash function have their own tag.}
+	\item Calculate the challenge using a cryptographically secure hash function, \(c = \mathcal{H}(T_p, [\alpha G])\).\footnote{MobileCoin has a policy\marginnote{[MC-tx] src/domain\_ separators.rs} of `domain separating' \cite{domain-separation-context-labels} different uses of hash functions. This in practice means prefixing each `use case' of a hash function with a unique bit-string. We model it here with the tag $T_p$, which might be the text string ``simple Schnorr proof". Domain separated hash functions have different outputs even with the same inputs. For the remainder of this document, we leave out domain separation tags for succinctness. In most cases, uses of hash function can be assumed to have their own tag, but readers seeking precision should refer to the source code.}
 	\item Define the response $r = \alpha + c*k$.
 	\item Publish the proof pair $(\alpha G, r)$.
 \end{enumerate}
@@ -348,7 +348,7 @@ Using a hash function, instead of the verifier, to generate challenges is known 
 \begin{enumerate}
 	\item Calculate the challenge: \(c' = \mathcal{H}(T_p, [\alpha G])\).
 	\item Compute $R = r G$ and $R' = \alpha G + c'*K$.
-	\item If $R = R'$ then the prover must know $k$ (except with negligible probability).
+	\item If $R = R'$, then the prover must know $k$ (except with negligible probability).
 \end{enumerate}
 
 \subsubsection*{Why it works}
@@ -389,7 +389,7 @@ Any third party who knows the EC domain parameters (specifying which elliptic cu
 
 \begin{enumerate}
 	\item Calculate the challenge: \(c' = \mathcal{H}(\mathfrak{m},[r G + c*K_A])\).
-	\item If $c = c'$ then the signature passes.
+	\item If $c = c'$, then the signature passes.
 \end{enumerate}
 
 In this signature scheme we store two scalars, and need to know one public EC key.
@@ -448,9 +448,9 @@ The importance of using prime-order-subgroup points was the motivation behind Ri
 \subsection{Ristretto}
 \label{subsec:ristretto}
 
-Ristretto can be thought of as a `binning' procedure for points in the underlying curve. The number of bins is equal to the prime-order subgroup of the relevant curve ($l$), and each bin has $h$ elements.\footnote{In group theory, what we call bins are more correctly known as `cosets' \cite{coset-wikibooks}.} Curve operations `on' or `between' bins behave just like curve operations on the prime-order subgroup, except in this model rather than a specific point the result is a specific bin.
+Ristretto can be thought of as a `binning' procedure for points in the underlying curve. The number of bins is equal to the prime-order subgroup of the relevant curve ($l$), and each bin has $h$ elements.\footnote{In group theory, what we call bins are more correctly known as `cosets' \cite{coset-wikibooks}.} Curve operations `on' or `between' bins behave just like curve operations on the prime-order subgroup, except in this model rather than a specific point, the result is a specific bin.
 
-This implies the members of a bin must be variants of a prime-order subgroup point (in other words, a prime-order point plus all the members of the cofactor-order subgroup, including the point-at-infinity). Given two bins, adding any of their members together will land you in the same third bin. In this way curve operations on `Ristretto points', which are simple containers that can hold a bin member from any bin, behave just like operations on prime-order subgroup points.
+This implies the members of a bin must be variants of a prime-order subgroup point (in other words, a prime-order point plus all the members of the cofactor-order subgroup, including the point-at-infinity). Given two bins, adding any of their members together will land you in the same third bin. In this way, curve operations on `Ristretto points', which are simple containers that can hold a bin member from any bin, behave just like operations on prime-order subgroup points.
 
 For example, given Ristretto points
 \begin{align*}
@@ -469,7 +469,7 @@ Two members of the same bin are considered `equal'. There is a relatively cheap 
 
 In each bin the point from the prime-order subgroup is the bin's `representative canonical member'. Moreover, that point can be easily found by `compressing' any of the bin members and then `decompressing' the result. This way curve points can be communicated in compressed form, and recipients can be assured they are handling effectively prime-order points and don't have to be concerned about cofactor-related problems.
 
-As a bit of callback, given some point $K$ in the prime-order subgroup and two points $K^h_a, K^h_b$ in the cofactor-order subgroup, both $K + K^h_a$ and $K + K^h_b$ will compress and then decompress into the same point $K$.\\
+As a bit of callback, given some point $K$ in the prime-order subgroup and two points $K^h_a, K^h_b$ in the cofactor-order subgroup, both $K + K^h_a$ and $K + K^h_b$ will compress and then decompress into the same point $K$.
 
 Since all bin members get compressed to the same bit string, there is no `gotcha' (as there is with standard Ed25519) where presenting different compressed members of a bin to a byte-aware context (e.g.\ a hash function or byte-wise comparison) will have different results.
 
@@ -486,7 +486,7 @@ Consequently, any point in Ed25519 could be expressed using 64 bytes. By applyin
 
 The Ed25519 curve has the property that its points can be easily compressed, so that representing a point will consume only the space of one coordinate. We will not delve into the mathematics necessary to justify this \cite{ristretto}, but we can give a brief insight into how it works. Normal point compression for the Ed25519 curve was standardized in \cite{eddsa-ed25519-irtf}, first described in \cite{Bernstein2012-high-speed-high-security-ed25519}, and the concept was introduced in \cite{Miller:point-compression-origin}.
 
-As background, it's helpful to know the normal point compression scheme follows from a transformation of the twisted Edwards curve equation (wherein $a = -1$): $x^2 = (y^2-1)/(d y^2+1)$,\footnote{Here $d = - \frac{121665}{121666}$.} which indicates there are two possible $x$ values ($+$ or $-$) for each $y$. Field elements $x$ and $y$ are calculated$\pmod{q}$, so there are no actual negative values. However, taking$\pmod{q}$ of $-x$ will change the value between odd and even since $q$ is odd. For example: $3 \pmod{5} = 3$, $-3 \pmod{5} = 2$. In other words, the field elements $x$ and $-x$ have different odd/even assignments.
+As background, it's helpful to know that the normal point compression scheme follows from a transformation of the twisted Edwards curve equation (wherein $a = -1$): $x^2 = (y^2-1)/(d y^2+1)$,\footnote{Here $d = - \frac{121665}{121666}$.} which indicates there are two possible $x$ values ($+$ or $-$) for each $y$. Field elements $x$ and $y$ are calculated$\pmod{q}$, so there are no actual negative values. However, taking$\pmod{q}$ of $-x$ will change the value between odd and even since $q$ is odd. For example: $3 \pmod{5} = 3$, $-3 \pmod{5} = 2$. In other words, the field elements $x$ and $-x$ have different odd/even assignments.
 
 If we have a curve point and know its $x$ is even, but given its $y$ value the transformed curve equation outputs an odd number, then we know negating that number will give us the right $x$. One bit can convey this information, and conveniently the $y$ coordinate has an extra bit.
 
@@ -504,28 +504,36 @@ Assume we want to compress a point \((x, y)\). First we transform it into {\em e
     \item [Square Root: {\tt Sqrt(u, v)}] \hfill
         \begin{enumerate}
             \item Create\marginnote{[dalek25519] src/field.rs {\tt Field- Element:: sqrt\_ra- tio\_i()}} an algorithm for computing $\sqrt{u/v} \pmod q$.\footnote{These algorithms are merely shown for a sense of completeness. It's best to consult the {\tt dalek} library's implementation \cite{dalek-curve25519-lib}, the Ristretto Group's notes \cite{ristretto}, and the Ristretto/Decaf IETF draft \cite{ristretto-decaf-ietf} for any production-level applications.}
-            \item Compute\footnote{Since $q = 2^{255}-19 \equiv 5 \pmod{8}$, $(q-5)/8$ and $(q-1)/4$ are straightforward integers.} \(z = u v^3 (u v^7)^{(q-5)/8} \pmod q\).
+            
+            \item Define $i = 2^{(q-1)/4} \pmod q$.
+
+            \item Compute\footnote{Since $q = 2^{255}-19 \equiv 5 \pmod{8}$, $(q-5)/8$ and $(q-1)/4$ are straightforward integers.} \(z = u v^3 (u v^7)^{(q-5)/8} \pmod q\). Set {\tt nonzero-square = true}.
             \begin{enumerate}
                 \item If \(v z^2 \stackrel{?}{=} u \pmod q\), set \(r = z\).
-                \item If \(v z^2 \stackrel{?}{=} -u \pmod q\), calculate \(r = z*2^{(q-1)/4} \pmod q\).
+                \item If \(v z^2 \stackrel{?}{=} -u \pmod q\), calculate \(r = i*z \pmod q\).
+                \item If \(v z^2 \stackrel{?}{=} i*(-u) \pmod q\), calculate \(r = i*z \pmod q\) and set {\tt nonzero-square = false}.
             \end{enumerate}
-            \item If the least significant bit of $r$ is 1 (i.e.\ it is odd), return $-r$, otherwise return $r$.\footnote{\label{footnote:point-comp-positive-convention-normal-decompression}According to the comments in {\tt [dalek] src/field.rs FieldElement::sqrt\_ratio\_i()}, only the `positive' square root should be returned, which is defined by convention in \cite{Bernstein2012-high-speed-high-security-ed25519} and \cite{ristretto-decaf-ietf} as field elements with the least significant bit not set (i.e.\ `even' field elements). In normal Ed25519 point decompression \cite{Bernstein2012-high-speed-high-security-ed25519} we would compute {\tt Sqrt}$(y^2 - 1, d y^2 + 1)$, then decide whether to use the `positive'/`negative' result variant depending on if we want the even/odd $x$ coordinate. Basically, a compressed point is the $y$ coordinate, with the most significant bit equal to 0 or 1 to indicate if the point's $x$ coordinate is even/odd.}
+
+            \item If the least significant bit of $r$ is 1 (i.e.\ it is odd), return $-r$, otherwise return $r$. Also return the boolean {\tt nonzero-square}.\footnote{\label{footnote:point-comp-positive-convention-normal-decompression}According to the comments in {\tt [dalek] src/field.rs FieldElement::sqrt\_ratio\_i()}, only the `positive' square root should be returned, which is defined by convention in \cite{Bernstein2012-high-speed-high-security-ed25519} and \cite{ristretto-decaf-ietf} as field elements with the least significant bit not set (i.e.\ `even' field elements). In normal Ed25519 point decompression \cite{Bernstein2012-high-speed-high-security-ed25519} we would compute {\tt Sqrt}$(y^2 - 1, d y^2 + 1)$, then decide whether to use the `positive'/`negative' result variant depending on if we want the even/odd $x$ coordinate. Basically, a compressed point is the $y$ coordinate, with the most significant bit equal to 0 or 1 to indicate if the point's $x$ coordinate is even/odd.}
         \end{enumerate}
 
 	\item[Encoding] \hfill
         \begin{enumerate}
             \item Define\marginnote{[dalek25519] src/ristr- etto.rs {\tt Ristretto- Point:: compress()}}
-                \begin{enumerate}
-                    \item $u_1 = (Z + Y)*(Z - Y) \pmod q$
-                    \item $u_2 = X Y \pmod q$
-                \end{enumerate}
+            \begin{enumerate}
+                \item $u_1 = (Z + Y)*(Z - Y) \pmod q$
+                \item $u_2 = X Y \pmod q$
+            \end{enumerate}
+    
             \item Let $\textrm{inv} = \textrm{{\tt Sqrt}}(1, u_1 u^2_2) \pmod q$.
+
             \item Define
             \begin{enumerate}
                 \item $i_1 = u_1*\textrm{inv} \pmod q$
                 \item $i_2 = u_2*\textrm{inv} \pmod q$
                 \item $z_{inv} = i_1 i_2 T \pmod q$
             \end{enumerate}
+
             \item Let $b$ equal the least significant bit of $z_{inv} * T \pmod q$
             \begin{enumerate}
                 \item If $b \stackrel{?}{=} 1$, define
@@ -541,19 +549,24 @@ Assume we want to compress a point \((x, y)\). First we transform it into {\em e
                     \item $D' = i_2$
                 \end{enumerate}
             \end{enumerate}
+
             \item If $z_{inv} * X' \pmod q$ is odd, set $Y' = -Y' \pmod q$.
+
             \item Compute $s = D' * (Z - Y') \pmod q$. If $s$ is odd, set $s = -s \pmod q$.
             \item Return $s$.
         \end{enumerate}
 
     \item[Decoding] \hfill
         \begin{enumerate}
-            \item Given\marginnote{[dalek25519] src/ristr- etto.rs {\tt Compress- edRistr- etto:: decompr- ess()}} a supposed compressed curve point $s$, check if it is a valid field element with a byte-wise comparison $s \pmod{q} \stackrel{?}{=} s$. Reject $s$ if it is odd or invalid. 
+            \item Given\marginnote{[dalek25519] src/ristr- etto.rs {\tt Compress- edRistr- etto:: decompr- ess()}} a supposed compressed curve point $s$. Reject $s$ if it is odd or $\geq q$.
+
             \item Compute
             \[y = \frac{1 + a s^2}{1 - a s^2} \pmod q\]
-            \item Compute ($x$ should be `even' after this step)\vspace{.155cm}
+
+            \item Compute ($x$ should be `even' after this step) the following. If {\tt nonzero-square} is {\tt false}, then the point is invalid.\vspace{.155cm}
             \[x = \textrm{{\tt Sqrt}}(4 s^2, a d (1 + a s^2)^2 - (1 - a s^2)^2) \pmod q\]
-            \item Convert to extended coordinates if desired.\vspace{.115cm}
+
+            \item Convert to extended coordinates. If $T$ is odd, then the point is invalid.\vspace{.115cm}
             \begin{align*}
                 X &= x \\
                 Y &= y \\

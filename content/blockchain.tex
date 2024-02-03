@@ -1,0 +1,230 @@
+\chapter{MobileCoin Blockchain}
+\label{chapter:blockchain}
+
+The Internet Age has brought a new dimension to the human experience. We can correspond with people on every corner of the planet, and an unimaginable wealth of information is at our fingertips. Exchanging goods and services is fundamental to a peaceful and prosperous society~\cite{human-action}, and in the digital realm we can offer our productivity to the whole world.
+
+Media of exchange (moneys) are essential, facilitating economic calculation with respect to an immense diversity of economic goods that would otherwise be impossible to evaluate, and enabling mutually beneficial interactions between people with nothing in common \cite{human-action}. Throughout history there have been many kinds of money, from seashells to paper to gold. Those were exchanged by hand, and now money can be exchanged electronically.
+
+In the current, by far most pervasive, model, electronic transactions are handled by third-party financial institutions. These institutions are given custody of money and trusted to transfer it upon request. Such institutions must mediate disputes, their payments are reversible, and they can be censored or controlled by powerful organizations. \cite{Nakamoto_bitcoin}
+
+To alleviate those drawbacks, decentralized digital currencies have been engineered.
+
+
+
+\section{Digital currency}
+\label{sec:digital-currency}
+
+At the most basic level, a digital currency is just a collection of messages, and the `amounts' recorded in those messages are interpreted as monetary quantities. There are three types of digital currencies: personal, centralized, or distributed.
+
+In the \textbf{email model}, anyone can make coins (e.g. a message saying ``I own 5 coins"), and anyone can `send their coins' to whoever has an email address. There is no limit to the supply of coins, nor is there a way to prevent someone from spending the same coins over and over (double spending).
+
+In the \textbf{video game model}, where the entire currency is stored/recorded on one central database, users rely on the custodian to be honest. The currency's supply is unverifiable for observers, and the custodian can change the rules at any time, or be censored by powerful outsiders.
+
+
+\subsection{Distributed/shared version of events}
+\label{subsec:shared-version-events}
+
+In digital `shared' money, many computers each have a record of every currency transaction. When a new transaction is made on one computer, it is broadcast to the other computers, and accepted if it follows predefined rules.
+
+Users only benefit from coins when other users accept them in exchange for goods and services, and users only accept coins they feel are legitimate. To maximize the utility of their coins, users are naturally inclined to settle on one commonly accepted rule-set, without the presence of a central authority.\footnote{In political science, this is called a Schelling point \cite{friedman-schelling}, social minima, or social contract.}
+\begin{itemize}
+    \item[] \textbf{Rule 1}: Money can only be created in clearly defined scenarios.
+    \item[] \textbf{Rule 2}: Transactions spend money that already exists.
+    \item[] \textbf{Rule 3}: A person can only spend a piece of money once.
+    \item[] \textbf{Rule 4}: Only the person who owns a piece of money can spend it.
+    \item[] \textbf{Rule 5}: Transactions output money equal to the money spent.
+    \item[] \textbf{Rule 6}:  Transactions are formatted correctly.
+\end{itemize}
+
+Rules 2-6 are covered by the transaction scheme discussed in Chapter \ref{chapter:transactions}, which adds the fungibility and privacy-related benefits of ambiguous signing, anonymous receipt of funds, and unreadable amount transfers. We explain Rule 1 later in this chapter.\footnote{In commodity money like gold, these rules are met by physical reality.} Transactions use cryptography, so we call their content a {\em cryptocurrency}.
+
+If two computers receive different legitimate transactions spending the same money before they have a chance to send the information to each other, how do they decide which is correct? There is a `fork' in the currency, because two different copies that follow the same rules exist.
+
+Clearly the earliest legitimate transaction spending a piece of money should be canonical. This is easier said than done. As we will see, obtaining consensus for transaction histories constitutes the raison d'\^{e}tre of distributed consensus protocols and blockchain technology as found in cryptocurrencies.
+
+
+\subsection{Simple blockchain}
+\label{subsec:simple-blockchain}
+
+First we need all computers, henceforth referred to as {\em nodes}, to agree on the order of transactions.
+
+Let's say a currency started with an `origin' (or `genesis', as it is more commonly known) declaration: ``Let the SampleCoin begin!". We call this message a `block', and its block hash is\vspace{.175cm}
+\[\mathit{BH}_O = \mathcal{H}(\textrm{``Let the SampleCoin begin!"})\]
+
+Every time a node receives some transactions, they use representations (e.g.\ hashes or bit-strings) of those transactions like messages, along with the previous block's hash, and compute new block hashes\vspace{.175cm}
+\[\mathit{BH}_1 = \mathcal{H}(\mathit{BH}_O, \mathit{TX}_1, \mathit{TX}_2,...)\]
+\[\mathit{BH}_2 = \mathcal{H}(\mathit{BH}_1, \mathit{TX}_3, \mathit{TX}_4,...)\]
+
+And so on, publishing each new block of messages as it's made. Each new block references the previous, most recently published block. In this way, a clear order of events extends/chains all the way back to the origin message. We have a very simple `blockchain'.\footnote{A blockchain is technically a `directed acyclic graph' (DAG), with Bitcoin-style blockchains a one-dimensional variant. DAGs contain a finite number of nodes and one-directional edges (vectors) connecting nodes. If you start at one node, you will never loop back to it no matter what path you take. \cite{DAG-wikipedia}}
+
+
+
+\section{Consensus protocol intro}
+\label{sec:consensus-protocol-intro}
+
+If different blocks referencing the same previous block are published at the same time, then the network of nodes will fork as each node receives one of the new blocks before the other (for simplicity, imagine about half the nodes end up with each side of the fork). Moreover, the likelihood of this happening rises with the frequency blocks are published.
+
+In `classical' cryptocurrencies modeled after Bitcoin, the speed at which blocks are produced, and the mechanism for resolving forks, is governed by the {\em Nakamoto consensus protocol} \cite{Nakamoto_bitcoin}.\footnote{At the heart of the Nakamoto consensus protocol, nodes compete for the right to publish new blocks by randomly generating numbers (nonces) that get inserted into blocks, until the block hash (using an inefficient `proof-of-work' hash algorithm) meets some condition. For example, if the hash value times a `difficulty' value is less than the maximum hash value, such that higher difficulties require more unlikely hash outputs, then a block can be published with the relevant nonce. By controlling the difficulty value dynamically, it is possible to control the speed at which blocks are produced, and chains with the highest cumulative difficulty (over all blocks) are considered canonical in fork scenarios. Since difficulty translates to work done computing proof-of-work hashes over time, chains with the highest cumulative difficulty are considered most likely to represent a network consensus. \cite{ztm-2}} That protocol has some drawbacks, which include susceptibility to 51\% attacks that roll back transaction events (especially for cryptocurrencies where the fiat-denominated cost of those attacks is relatively low), the energy cost of proof-of-work algorithms is worrisome to those concerned about the environment or sustainability, and it can take on the order of tens of minutes to confirm that a transaction has been successfully added to the blockchain (as opposed to mere seconds for e.g.\ credit card transactions) \cite{fast-secure-global-payments-stellar}.
+
+
+\subsection{Stellar Consensus Protocol}
+\label{subsec:blockchain-stellar-consensus-protocol}
+
+MobileCoin obtains consensus on blockchain contents with a different model known as {\em federated Byzantine agreement}, specifically an implementation of the Stellar Consensus Protocol (SCP) which is based on that model \cite{stellar-consensus-protocol}. In SCP, before the blockchain can be extended with a new block, all (or at least all well-behaved and well-connected) nodes must come to an agreement about which block should be added next. This allows SCP-based blockchains to add new blocks quite rapidly (on the order of seconds in the typical case \cite{fast-secure-global-payments-stellar}), because automatically reaching consensus on new blocks can occur at the speed of Internet connections between nodes.
+
+In Chapter \ref{chapter:consensus}, we show that SCP allows a network of nodes to consensuate blockchain contents without forking apart or causing honest nodes to have an incorrect view of those contents. The details of SCP are important, but not necessarily pertinent to users. As far as users need to be concerned, SCP-based blockchains have similar trust requirements to Nakamoto-based blockchains. If a user connects to an honest node,\footnote{In SCP, only honest nodes that are configured well can be trusted. Badly configured nodes may get an incorrect view of the blockchain, although following robust configuration guidelines mitigates that risk \cite{fast-secure-global-payments-stellar}.} they can be confident they are interacting with the MobileCoin network correctly, but if they connect to a bad node then all bets are off.
+
+
+\subsection{MobileCoin network overview}
+\label{subsec:blockchain-network-overview}
+
+At a high level, the MobileCoin network is not that complicated. Users may run their own nodes to access the blockchain's contents (see Chapter \ref{chapter:fog-service} for a more efficient way to use MobileCoin). This allows them to learn about their owned outputs and assemble membership proofs (Chapter~\ref{chapter:membership-proofs}) for creating new transactions. 
+
+Nodes come in two flavors. Validator nodes cooperate with other validator nodes to add blocks to the blockchain by following the SCP protocol. They contain SGX secure enclaves, which are responsible for validating transactions and constructing blocks. Watcher nodes may connect to validator nodes to acquire new blocks, but don't participate in consensuating those blocks.\footnote{Technically a watcher node could audit published blocks by checking if the key images they contain have appeared before in its copy of the blockchain. Currently\marginnote{watcher/src/ watcher.rs {\tt sync\_blocks()}} watcher nodes only collect blocks from validator nodes and verify the blocks' signatures (via the obscure code path {\tt watcher.rs sync\_block() -> reqwest\_transactions\_fetcher.rs block\_from\_url() -> archive\_block.rs try\_from() -> block\_signature.rs verify() -> ed25519.rs verify()}), and collect and verify\marginnote{watcher/src/ verification\_ reports\_colle- ctor.rs {\tt get\_verifica- tion\_report()}} validator enclave {\tt AVR}s (recall Section \ref{subsec:enclaves-sgx-attestation}) containing block signature keys (which provide evidence that block signatures were created by validator enclaves).} To be clear, validator enclaves only\marginnote{*consensus/ enclave/im- pl/src/lib.rs {\tt tx\_is\_well\_ formed()} {\tt form\_blo- ck()}} validate transactions and assemble blocks, while SCP is orchestrated by their host processes.
+
+To submit a new transaction to the network, a user transmits it securely to the enclave in a validator node. That enclave validates the transaction, then sends it out to the network (i.e.\ to other validator enclaves). The network follows the SCP protocol, and eventually all validator nodes in the network publish a new block containing the outputs and key images from that transaction (input signatures, membership proofs, and Bulletproofs are discarded by the enclaves, never to be seen by any but their makers' eyes).
+
+
+\subsection{Validation framework}
+\label{subsec:blockchain-validation-framework}
+
+It may seem odd that all transactions can be validated without anyone being able to see them. However, consider a validator node operator's perspective. He was the one to set up the node, so he knows (or can know, if he chooses) exactly what software is being run by the validator enclave. If the enclave software is well made, then no matter what transactions are passed into it, only valid outputs and key images will be appended to the blockchain.
+
+To anchor transaction validation with the existing blockchain state, validator enclaves must verify key images and txout public keys have not appeared in the blockchain, and ring signature members do appear in the blockchain (recall Chapter \ref{chapter:transactions}). Both require reaching outside of the {\tt ELRANGE}.
+
+\begin{itemize}
+    \item Key images\marginnote{consensus/ service/src/ validators.rs {\tt is\_valid()}}[-0.75cm] and txout public keys are sent to the enclave host process, which checks its local copy of the blockchain for duplicates and notifies the enclave of its findings.\footnote{Validator node operators can use these duplicate checks to connect outputs and key images with specific transactions submitted by users (node operators can see when a user submits a transaction, since she sends data to the validator enclave).}
+
+    \item An enclave requests\marginnote{{\tt well\_form- ed\_check()}} output membership proofs from its host process corresponding to the `highest indices' from the membership proofs in a transaction-being-validated (recall Section~\ref{sec:merkle-membership-proofs}).
+\end{itemize}
+
+
+\subsection{Intentional forking}
+\label{subsec:blockchain-intentional-forking}
+
+If operators of validator nodes wish to change the basic protocol, i.e.\ the set of rules a validator node considers when deciding if old blocks or new transactions are legitimate, they may easily do so by forking the chain. Whether the new branch has any impact on users depends on how many validator and watcher nodes switch over and how much software infrastructure is modified.
+
+Since the current MobileCoin protocol relies on SGX secure enclaves, periodic hard forks are unavoidable in order to upgrade the network's enclaves with security updates released by Intel.\footnote{A `hard fork' results from any change to validator node software that causes updated nodes to create or approve of blocks that would be considered invalid by nodes that weren't updated, or to disapprove of new blocks created by nodes that weren't updated. Validator enclaves can only send transactions to enclaves that share\marginnote{*crypto/ake/ enclave/src/ lib.rs {\tt get\_verif- ier()}} their {\tt MRENCLAVE} value (and have a certain constraint on their {\tt CPUSVN} value to mitigate `load value injection', see this Intel Security Advisory: \cite{intel-security-advisory-334-load-value-injection}), so any enclaves with a non-standard implementation or SGX security version will be unable to access transactions sent to standard enclaves. Such non-standard enclaves will effectively be in a different network from standard enclaves. See Chapter \ref{chapter:enclaves} footnote \ref{footnote:enclaves-revoke-epid-groups-hard-fork-force-update} for a discussion of hard forking to enforce SGX security updates.} As of writing this, no known hard forks have been executed by MobileCoin validator nodes (the origin block was created on December 7\nth, 2020 \cite{mobilecoin-launch}).\footnote{While no hard forks have been executed on the main MobileCoin blockchain, the `testnet' blockchain has successfully undergone forks according to private correspondence with the MobileCoin development team.}\footnote{Since it is not safe to pass enclave secrets (such as transactions not yet added to a block) to a user-specified new enclave (recall Chapter \ref{chapter:enclaves} footnote \ref{footnote:enclave-secret-migration-dangerous}), it is not trivial to transition between validator enclave versions without interruption. One method is to completely shut down the existing network and then reboot it (i.e.\ all the validator nodes) with new enclave software. Another, more advanced method that avoids interruption, but has not been implemented and is undergoing research, is for the network to automatically transition to new protocol rules by using MobileCoin's consensus protocol (based on SCP) to decide the transition point.}%[[[citation for testnet forks]]]
+
+%Unlike blockchains consensuated with the Nakamoto method, FBA-based blockchains are very difficult to modify without an intentional, near-unanimous network-wide effort. In a Nakamoto blockchain, an attacker can `alter' transaction history by creating a chain of blocks with higher total difficulty than the `current' chain. In other words, they can convince other nodes to accept a different history by working within the consensus rules (often referred to as a 51\% attack). However, blocks created from an FBA agreement are assumed by the protocol to be canonical from birth.\footnote{As we will see in Chapter \ref{chapter:consensus}, if the unlikely event of a network divergence does occur (an FBA fork is called a divergence), then to repair the network the longest blockchain with a so-called `valid quorum' will be considered canonical, and any shorter chains will be deleted.}
+
+
+
+\section{Money supply}
+\label{sec:money-supply}
+
+There are two basic mechanisms for creating money in a blockchain-based cryptocurrency.
+
+First, the currency's creators can conjure coins and distribute them to people in the origin message. This is often called an `airdrop', although increasing regulatory requirements have greatly constrained cryptocurrency developers' ability to distribute coins in this way \cite{telegram-sec-token-shut-down, ripple-sec-token-shut-down}. Sometimes creators give themselves a large amount in a so-called `pre-mine' \cite{premine-description}.
+
+Second, the currency can be automatically distributed as reward for creating a block, much like mining for gold. There are two types here. In the Bitcoin model, the total possible supply is capped. Block rewards slowly decline to zero, after which no more money is ever made. In the inflation model, supply increases indefinitely (Monero is an inflationary cryptocurrency \cite{ztm-2}).
+
+
+\subsection{MobileCoin money creation}
+\label{subsec:blockchain-mobilecoin-money-creation}
+
+There are currently no well-studied methods for automatically distributing coins in a cryptocurrency employing SCP. As such, all MobileCoins (a.k.a.\ MOB, MobileCoin's so-called `stock ticker') were created and distributed in the origin block (see Appendix \ref{appendix:origin-block}).\footnote{According to a filling with the SEC \cite{mobilecoin-sec-filling}, 48 individuals/entities payed approximately 30 million USD to MobileCoin, Inc. under a `simple agreement for future tokens' (SAFT) in 2018. In a SAFT, a cryptocurrency developer may receive USD from investors prior to the currency's launch, in exchange for documentation saying if the currency is created then the investors will be given `access' to tokens \cite{investopedia-saft}. Presumably this means some portion of the MobileCoins created in the origin block wound up in the pockets of those 48 people/entities. Since the MobileCoin network is actively processing transactions, it is now impossible (or at least only negligibly possible) to know who on this planet owns how many MobileCoins (without their voluntary disclosure).}\footnote{It may be possible to layer a proof-of-work-based coin emission scheme on top of an SCP-based cryptocurrency. What follows is a sketch of that system, presented for academic completeness (since MobileCoin has already been launched, there is no possibility of it being implemented there). Add a new `emission' block type that gets created at infrequent intervals, and two new transaction output types called `emission claims' and `emission rewards'. Normal blocks should report fee amounts in the clear (or nodes should keep track of fee totals internally). An emission claim is a simple proof-of-work that takes the last emission block as input, with hash target based on a `difficulty' value. The claim contains \{nonce, {\tt TxOutClaim}\} where {\tt TxOutClaim} = \{one-time address, txout pub key, {\tt e\_fog\_hint}\}. To build an emission block, we look at each emission claim since the last emission block and create a new emission reward with output amount (communicated in cleartext) equal to a deterministically-calculated block reward, plus the total fee amount that has yet to be consumed divided by the number of emission claims. Each claim gets the same amount. Fees could be pegged to the emission rate in a way analogous to Monero's dynamic fee algorithm \cite{ztm-2}. A difficulty adjustment algorithm controls long-term emission rates by making the proof-of-work harder/easier based on how many emission claims have been submitted over time. Note that it is not immediately clear how to implement reliable time-tracking for controlling the interval at which emission blocks are created; perhaps the Stellar Consensus Protocol could be adapted to deciding when to make those blocks.} There are 250 million MOB in existence, and unless something goes horribly wrong (e.g.\ a code bug, a catastrophic network failure, or the network hard forking to create more coins), no more MOB will ever be created.\footnote{MobileCoin output amounts are hidden in Pedersen commitments, so the MOB created in the genesis block cannot be observed directly. Instead, observers can generate the `Origin Account' and examine the outputs owned by that account that originate from the origin block. See Appendix \ref{appendix:origin-block} and \cite{mobilecoin-governance-fees-supply} for more details.} Each MOB is divisible into $10^{12}$ parts called picoMOBs.\footnote{Incidentally, since Bulletproofs limit output amounts to 64 bits, the maximum amount of MobileCoins that can be contained in one output is approximately 18.4 million MOB (i.e.\ $2^{64} - 1$ picoMOB), or about 1/13\nth of the total supply.}
+
+
+
+\section{Transaction fees}
+\label{sec:blockchain-transaction-fees}
+
+It would be nice to add any and every transaction to the blockchain. What if someone submits a lot of transactions maliciously? The blockchain, storing outputs and key images from every transaction, would quickly grow enormous. To impose a cost on would-be spammers, MobileCoin transactions are required to include a minimum fee (recall Section \ref{sec:commitments-and-fees}).\footnote{When MobileCoin was launched \cite{mobilecoin-launch}, the minimum fee was set to 0.01 MOB\marginnote{[MC-tx] src/const- ants.rs {\tt MINIMUM\_FEE}}. It may be possible to replace the minimum fee with, or layer on top of it, an ad hoc fee policy at the network layer for dynamic fee adjustment based on the rate at which transactions are submitted (e.g.\ to mitigate high-budget attacks \cite{big-bang-github} and reduce fee costs for normal users by only allowing high fees when transaction volume is increasing \cite{min-fee-research-issue-70}), see Chapter \ref{chapter:consensus} footnote \ref{footnote:scp-tipping-point-voting}.}
+
+The fee amounts in a given block's transactions are collected by validator enclaves,\footnote{Fees are recorded in picoMOB format in transactions.} which create\marginnote{*consensus/ enclave/im- pl/src/lib.rs {\tt mint\_aggre- gate\_fee()}} a fee output that appears the same as a normal output, and publish it as part of the block's content.\footnote{\label{footnote:fee-output-public-knowledge}Since validator node operators are able to learn which outputs come from which transactions submitted by users (recall Section \ref{subsec:blockchain-validation-framework}), they can also figure out which outputs published in each block are fee outputs. It is impossible to control the behavior of validator node operators, so it's reasonable to say the classification between fee outputs and normal outputs is `public knowledge', although in practice most fee outputs could go unidentified. It may seem like eliminating duplicate checks for txout public keys could prevent operators from identifying fee outputs, however operators can set up a node running on a divergent network, which receives transactions from the normal network, but publishes blocks independently. If this divergent network has different block IDs, then fee outputs will be different from normal-network fee outputs, allowing the node operator to discern which real-chain outputs are for fees.} To ensure all nodes create the same fee output, it is deterministically generated.\footnote{Fee amounts (and, as it happens, the tombstone blocks) from each transaction are transmitted out of validator enclaves and explicitly readable\marginnote{consensus/ enclave/ api/src/lib.rs {\tt {\em struct} WellFormed- TxContext}} by node operators. Supposedly this allows node operators to inform users about fees in recent blocks, so they can make transactions with higher fees if the network is congested.}
+
+\begin{itemize}
+    \item Fee output recipient: When creating a validator enclave, the fee recipient is baked into\marginnote{consensus/ enclave/im- pl/build.rs {\tt main()}} the enclave software \cite{mc-pull-request-fee-key-build-input}. If any validator node tries to use an `unofficial' fee recipient, their enclave's {\tt MRENCLAVE} will not match other nodes, effectively shutting them out of the network (validator enclaves can only communicate with enclaves that share an {\tt MRENCLAVE} value).\footnote{In the launch version of MobileCoin, fees are supposedly received by the MobileCoin Foundation. \cite{mobilecoin-governance-fees-supply}}
+
+    \item Txout private key $r_t$: Fee output txout private keys are created\marginnote{*consensus/ enclave/im- pl/src/lib.rs {\tt form\_bl- ock()}} within validator enclaves from a hash of the previous block's ID (see Section \ref{sec:blockchain-structure}) and the current block's full transaction contents. Since part of those contents are discarded before a block is published, observers cannot reproduce the txout private key, leaving the fee output nominally indistinguishable from other outputs.\footnote{If a specific transaction author created all the transactions in a given block, then he will be able to recreate the fee output's txout private key. However, this provides him no benefits as he can already deduce which output in the block wasn't created by him (and hence must be the fee output) and the global fee recipient is public knowledge.}
+\end{itemize}
+
+
+
+\section{Blockchain structure}
+\label{sec:blockchain-structure}
+
+MobileCoin's blockchain starts with an origin block\marginnote{util/gener- ate-sample- ledger/src/ lib.rs {\tt boostrap\_ ledger()}} consisting of 16 outputs that contain the full supply of MobileCoins (see Appendix \ref{appendix:origin-block}). The next block contains a reference to the previous block in the form of block ID, which is a hash of information about the block.
+
+As mentioned, new blocks are created based on the collaboration of many nodes in the network (see Chapter \ref{chapter:consensus}). Once the network decides to add a block of transactions to the chain, the network's validator enclaves discard extraneous transaction information (ring signatures, membership proofs, and Bulletproofs) and publish the remaining parts (key images and outputs).\footnote{Since the network actively collaborates on new blocks, new blocks only appear when there are transactions to process. That is to say, the blockchain will not be modified whenever there are no transactions being submitted.}
+
+Importantly, validator enclaves that publish a block they participated in validating also sign\marginnote{*consensus/ enclave/im- pl/src/lib.rs {\tt form\_bl- ock()}} the block.\footnote{Blocks are signed\marginnote{[dalekEd] src/secret.rs {\tt sign()}} with a Schnorr-like signature scheme using curve Ed25519 (without the Ristretto abstraction) implemented in the {\tt dalek-cryptography ed25519-dalek} library \cite{dalek-ed25519-lib}.} The signing key is the same key obtained by transaction authors when setting up a communication channel with validator enclaves, meaning it has a corresponding {\tt AVR} (recall Section~\ref{subsec:enclaves-sgx-attestation}). This allows observers to verify that blocks recorded in the blockchain were validated by SGX secure enclaves running the MobileCoin validator node software.\footnote{Due to an oversight in MobileCoin's launch process, watcher nodes were not equipped to collect validator enclave {\tt AVR}s until two months after the origin block was created \cite{mc-pull-request-watcher-logs-avrs}, while validator nodes themselves only retained copies of {\tt AVR}s for active signing keys. Moreover, in the period between launch and watcher nodes beginning to collect {\tt AVR}s, all active validator nodes restarted their enclaves at least once. The practical effect of this is there are no records of {\tt AVR}s from the first 479 blocks (created during the first three days of MobileCoin's existence). However, those 479 blocks have at least six signatures each, supposedly corresponding to the six nodes active at the time of MobileCoin's launch (this has not been verified yet as far as we know). This means, at the very least, that for those initial 479 blocks to contain forgeries that minted new coins, all six node operators must be dishonest (they either lied about their signature claims, or collaborated on a block forgery). If {\tt AVR}s were available, then for forgeries to occur, all six node operators must have both collaborated and exploited an SGX vulnerability simultaneously. In other words, the `trust model' for assessing the integrity of those blocks is reduced from `node operators and Intel' to just `node operators'.}%[[[479 block footnote needs citation]]]
+
+
+\subsection{Blocks}
+\label{subsec:blocks}
+
+A block is a block header, a collection of key images and transaction outputs, and a block signature.\footnote{Before a block is published (and before its block ID is calculated), its key images and outputs are sorted\marginnote{*consensus/ enclave/impl/ src/lib.rs {\tt form\_block()}} (outputs are sorted by txout public key). This ensures all validator enclaves end up creating identical blocks.} Block headers record information about each block. We present here the outline of a block's contents. Our readers can find a real block example in Appendix \ref{appendix:block-content}.
+
+\begin{itemize}
+    \item \underline{Block header}:
+    \begin{itemize}
+        \item \textbf{Block ID}: This block's ID, created as a hash\marginnote{[MC-tx] src/block- chain/ block.rs {\tt compute\_bl- ock\_id()}} of the other block header fields.
+
+        \item \textbf{Version}: This block's version (0 at the time of MobileCoin's launch). Semantically, the block version can be thought of as the number of scheduled hard forks (i.e.\ protocol updates) that have occurred since MobileCoin launched.\footnote{Future versions of MobileCoin may update the block header to reflect the hard fork-based versioning scheme more precisely \cite{rfc-mobilecoin-hardforks}.}
+
+        \item \textbf{Parent block's ID}: Referencing the previous block, this is the essential requirement of a blockchain.
+
+        \item \textbf{Index}: This block's index in the blockchain (i.e.\ among all the blocks that exist).\footnote{The origin block has index `0'.}
+
+        \item \textbf{Cumulative output count}: The total number of outputs in the blockchain at the time this block was created, including this block's outputs.
+
+        \item \textbf{Root element}: The root hash\marginnote{*consensus/ enclave/im- pl/src/lib.rs {\tt form\_bl- ock()}} of the outputs currently recorded in the blockchain (excluding this block's outputs). In other words, the root hash of any membership proof created from the existing output set.
+
+        \item \textbf{Contents hash}: A simple hash\marginnote{[MC-tx] src/block- chain/ block\_cont- ents.rs {\tt hash()}} of all the key images and outputs appended to the blockchain by this block (calculated after they are sorted).
+    \end{itemize}
+
+    \item \underline{Block contents}: All the key images and transaction outputs (including the fee output) to be appended to the blockchain by this block.
+
+    \item \underline{Block signature}: A signature\marginnote{*[MC-tx] src/block- chain/ block\_sign- ature.rs {\tt form\_block\_ and\_key- pair()}} on the block header by a validator enclave. Specifically, each validator enclave that publishes a block (many enclaves will publish each block concurrently) creates their own signature and includes it with their local copy of the block. By collecting the block signatures and {\tt AVR}s from many validator nodes in the network, users can gain confidence that blocks are legitimate according to the MobileCoin protocol rules.\footnote{Once a block has been sent out of a validator enclave, the host process adds a timestamp\marginnote{consensus/ service/src/ tx\_manager.rs {\tt tx\_hashes\_ to\_block()}} next to the block signature. This timestamp is not verifiable in any way, but helps observers of the blockchain get an idea about when blocks were created.}
+\end{itemize}\vspace{.05cm}
+
+To record a new block, the following information is stored:
+
+\begin{itemize}
+    \item Block header: Aside from the 4-byte block version, 8-byte block index, and 8-byte cumulative output count, all parts of the block header are 32 bytes. In total, a block header is 148 bytes.
+
+    \item Block contents: Recalling Section \ref{sec:ringct-space-and-ver}, each transaction output is 188 bytes and each key image is 32 bytes.
+
+    \item Block signature: A block signature contains a 64-byte signature\marginnote{[dalekEd] src/const- ants.rs {\tt SIGNATURE\_ LENGTH}}, 32-byte public signing key, and 8-byte timestamp added by the node operator. In total, 104 bytes.\footnote{A simple block representing one transaction with two inputs and two outputs will be $148 + 2*32 + 3*188 + 104 = 880$ bytes (recall there is a fee output added to each block).}
+\end{itemize}
+
+
+
+\section{Beyond the validation framework}
+\label{sec:blockchain-beyond-validation-framework}
+
+MobileCoin is the first cryptocurrency to try and completely erase parts of its transaction history. In all other cryptocurrencies, even if some block contents are automatically pruned by nodes (e.g.\ Mimblewimble/Grin  \cite{intro-mimblewimble-grin}), in all cases full versions of transactions can be copied and stored indefinitely by node operators.
+
+This poses an interesting problem for future users of MobileCoin, who cannot re-validate existing transactions. How can they be sure the rules discussed in Section \ref{subsec:shared-version-events} have always been applied correctly?
+
+While transactions cannot be re-validated, there remain several pieces of information that observers can use to assess the MobileCoin blockchain. Above all else, it should be the role of watcher nodes and watcher node operators to collect, actively examine, and archive these data.\footnote{Watcher nodes may be operated by anyone in the world, and it is our view that no amount of watcher nodes running concurrently is too many.}\footnote{As mentioned, the current watcher node implementation only collects blocks and {\tt AVR}s, and verifies that block signatures are correct. Hopefully future updates to that implementation will expand its capabilities.}
+
+\begin{enumerate}
+    \item The implementation of validator nodes and validator enclaves. Quite simply, if transaction validation and block construction are not implemented properly, then MobileCoin can't possibly work. MobileCoin's source code is presently stored in a Github repository \cite{mobilecoin-source-code}, and can be examined by any person on the planet (who can access Github). Github may become unavailable in the future, so observers should maintain copies of the repository for future reference.
+    
+    Note that `git' repositories inherently store a complete history of changes, so it's reasonably easy to examine old versions of the MobileCoin implementation given a copy of the repository.
+
+    \item To connect the supposed implementation of MobileCoin validator nodes with the actual validation code executed at any point in time, blocks are signed with keys that are attested to in {\tt AVR}s. These {\tt AVR}s have {\tt MRENCLAVE} and {\tt CPUSVN} values representing the code that validator enclaves are running and which SGX implementation they are using (recall Section \ref{subsec:enclaves-sgx-attestation}).
+
+    A future observer can use the block signatures found in the blockchain, in combination with their signing keys' {\tt AVRs} (which can be collected by observers from validator nodes), to gain confidence that blocks were validated properly. However, SGX secure enclaves are prone to vulnerabilities~\cite{wiki-sgx-attacks}, so a given {\tt AVR} may not be reliable. As more {\tt AVRs} and block signatures are collected for each block in the blockchain, it becomes less likely any of the blocks are invalid. So long as just one validator enclave represented by a known valid block signature {\tt AVR} was operating correctly while creating a block, the block must be correct.
+
+    \item Enclaves are only able to validate blocks with respect to information made available by the local machine. Specifically, key image checks (and txout public key checks) are performed by the local machine, and current membership proofs are provided by the local machine to the enclave (recall Section \ref{subsec:blockchain-validation-framework}).
+    
+    While a validator node operator could fool their enclave into approving a transaction containing a key image that already exists in the chain, this is easy to detect. Anyone who obtains a copy of an invalid block created by that node will see the duplicate key image and can raise an alarm (likewise with a duplicate txout public key).
+
+    More insidiously, a validator node operator could falsify the record of existing on-chain outputs, and provide membership proofs to their enclave representing outputs that don't actually exist in the chain. This could allow a conspiring transaction author to create MOB out of thin air by spending those fake outputs.
+
+    To avoid that problem, each block header includes a root element (recall Section \ref{subsec:blocks}), which is the root hash of any membership proof made with the current set of on-chain outputs. The MobileCoin protocol requires that all highest-index membership proofs passed to an enclave for validating the transactions in a block have the same root hash (the same one which is placed in the block header) (recall Section \ref{sec:merkle-membership-proofs}). Observers of the blockchain can recompute the root element for each block, and ensure it correctly represents the full set of outputs added to the chain before that block.
+
+    \item Even if a specific block appears valid to observers, the enclave that created it may be interacting with a partially invalid or malformed blockchain. This can manifest in different block IDs between nodes. To promote uniformity in the network, it is important to check the correctness of block IDs as blocks are produced. In particular, watcher nodes should only accept information about blocks with apparently valid block IDs (in other words, there is only one valid blockchain).
+
+    \item While very rare under normal conditions, it is possible for the network to fork into more than one fully valid chain (called a `soft fork'). These soft forks must be resolved by part of the network deliberately abandoning their chain and adopting the other part's chain (see Section \ref{subsec:consensus-healing-divergences}).\footnote{Malicious node operators may try to exploit the soft fork resolution design to execute a double spend attack. In other words, they could spend outputs on one side of the fork, then convince the network to adopt a different side of the fork where those outputs weren't spent. In practice, this would be very difficult to accomplish without compromising large parts of the network (see Chapter \ref{chapter:consensus}).}
+
+    In the Nakamoto consensus protocol, small `fully-valid' forks are expected and common, but in MobileCoin's consensus protocol they should be rare and unexpected (indicating a serious problem with the network). As such, each spontaneous fork that comes into existence and gets resolved must be recognized explicitly by node operators in the network. Those operators should seek to understand why there was a fork, and work to prevent future forks from happening.
+
+    Observers, especially watcher nodes, should record spontaneous forks so they can keep validator node operators accountable for network health, and log for future reference these critical events.
+\end{enumerate}
+
+In SCP, it is necessary that there be some honest node operators \cite{stellar-consensus-protocol}, but MobileCoin's implementation loosens this restriction by tying the validity of block contents to secure enclaves. As we have described, even if all node operators are dishonest, unless they all coordinate a specific attack that relies on an SGX vulnerability, observers (e.g.\ watcher nodes) have the ability to detect suspicious behavior (e.g.\ coin-minting or double-spends).%[[[not true for first 479 blocks unless MC team can rustle up some old AVRs]]]
